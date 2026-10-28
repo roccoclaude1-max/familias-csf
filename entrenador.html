@@ -63,6 +63,7 @@ select:focus-visible,input:focus-visible,textarea:focus-visible,button:focus-vis
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .row>input{flex:1 1 160px;min-width:0;width:auto}
 .btn{font:600 15px var(--body);min-height:46px;padding:0 16px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+a.btn{text-decoration:none}
 .btn:active{filter:brightness(.95)}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
 .btn.ok{background:var(--green);border-color:var(--green);color:#fff}
@@ -208,7 +209,7 @@ async function ghPut(text){
 let cfg={mode:'att',amount:1,reason:''};
 try{cfg=Object.assign(cfg,JSON.parse(ls.get('club-cfg')||'{}'));}catch(e){}
 const saveCfg=()=>ls.set('club-cfg',JSON.stringify(cfg));
-const ui={tab:'reg',day:today(),sel:'',q:'',confirm:null,editing:null,loading:true,loadErr:'',connected:false,save:'saved',showLink:null,newName:'',result:null,all:false,showJson:false,undo:[]};
+const ui={tab:'reg',day:today(),sel:'',q:'',confirm:null,editing:null,loading:true,loadErr:'',connected:false,save:'saved',showLink:null,newName:'',result:null,all:false,showJson:false,undo:[],gateErr:''};
 function emptyData(){return{v:1,club:'Mi club',salt:'',updated:'',classes:[],students:[]};}
 function normalizeData(d){
   if(!d||!Array.isArray(d.students))d=emptyData();
@@ -219,6 +220,22 @@ function normalizeData(d){
   return d;
 }
 const stu=key=>D&&D.students.find(s=>s.c===key);
+/* ---------- Usuario del entrenador (filtro, no seguridad: lo que protege los datos es el token) ---------- */
+const userHash=(salt,u)=>sha(salt+'|usr|'+normTokens(u).join(' '));
+function pendingCoach(){try{return JSON.parse(ls.get('club-coach-new')||'null');}catch(e){return null;}}
+function unlocked(){
+  if(!D)return false;
+  if(D.coach&&D.coach.h)return ls.get('club-coach')===D.coach.h;
+  return !!pendingCoach();
+}
+function applyPendingCoach(){
+  const pc=pendingCoach();
+  if(ui.connected&&D&&pc&&!(D.coach&&D.coach.h)){D.coach={s:pc.s,h:pc.h};touch(300);}
+}
+function gateCard(){
+  const first=!(D.coach&&D.coach.h);
+  return '<section class="stack"><h2 class="h">'+(first?'Creá tu usuario':'Entrenador')+'</h2><form class="card stack" id="gate" style="gap:12px"><div class="muted sm">'+(first?'Elegí un usuario para el panel del entrenador. Lo vas a usar cada vez que entres desde un teléfono nuevo.':'Escribí tu usuario para entrar al panel.')+'</div><label class="field">Usuario<input type="text" id="gate-user" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go"></label>'+(ui.gateErr?'<div class="note bad" role="alert">'+esc(ui.gateErr)+'</div>':'')+'<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" type="submit">'+(first?'Crear usuario':'Entrar')+'</button><a class="btn ghost" href="./">Volver al inicio</a></div></form></section>';
+}
 const dates=()=>[...new Set(D.students.reduce((a,s)=>a.concat(s.a),[]))].sort();
 function ranking(){
   const rows=D.students.map(s=>({s,p:s.p||0,a:s.a.length}));
@@ -308,10 +325,10 @@ async function addStudent(full){
 /* ---------- Vistas ---------- */
 const CREST='<svg class="crest" viewBox="0 0 60 72" aria-hidden="true"><defs><clipPath id="sh"><path d="M4 4H56V38C56 54 44 64 30 70C16 64 4 54 4 38Z"/></clipPath></defs><g clip-path="url(#sh)"><rect width="60" height="72" fill="#2f8a3e"/><rect x="21" width="18" height="72" fill="#ffffff"/><rect y="18" width="60" height="18" fill="#ffffff"/><rect x="24.5" width="11" height="72" fill="#1b4585"/><rect y="21.5" width="60" height="11" fill="#1b4585"/><circle cx="30" cy="27" r="11" fill="#ffffff"/><circle cx="30" cy="27" r="8.5" fill="none" stroke="#e1b02b" stroke-width="2"/></g><path d="M4 4H56V38C56 54 44 64 30 70C16 64 4 54 4 38Z" fill="none" stroke="#e1b02b" stroke-width="3.5" stroke-linejoin="round"/></svg>';
 function headerHtml(){
-  return '<header class="band"><div class="in">'+CREST+'<div class="ttl"><div class="club" id="clubtxt">'+esc(D?D.club:'Club')+'</div><div class="who">Entrenador</div></div>'+(ui.connected?'<button class="chip-save" id="savechip" data-act="save-now" data-st="'+ui.save+'">'+SAVE_TXT[ui.save]+'</button>':'')+'</div></header>';
+  return '<header class="band"><div class="in">'+CREST+'<div class="ttl"><div class="club" id="clubtxt">'+esc(D?D.club:'Club')+'</div><div class="who">Entrenador</div></div>'+(ui.connected&&D&&unlocked()?'<button class="chip-save" id="savechip" data-act="save-now" data-st="'+ui.save+'">'+SAVE_TXT[ui.save]+'</button>':'')+'</div></header>';
 }
 function connectCard(){
-  if(ui.connected)return '<div class="card stack" style="gap:10px"><h3 style="margin:0">Conexión con GitHub</h3><div class="note ok">Conectado a <b>'+esc(REPO)+'</b>. Los cambios se publican solos para las familias.</div><div><button class="btn sm ghost" data-act="disconnect">Desconectar este teléfono</button></div></div>';
+  if(ui.connected)return '<div class="card stack" style="gap:10px"><h3 style="margin:0">Conexión con GitHub</h3><div class="note ok">Conectado a <b>'+esc(REPO)+'</b>. Los cambios se publican solos para las familias.</div><div class="acts" style="margin:0"><button class="btn sm ghost" data-act="disconnect">Desconectar este teléfono</button><button class="btn sm ghost" data-act="coach-out">Cerrar sesión</button></div></div>';
   return '<div class="card stack" style="gap:10px"><h3 style="margin:0">Conectar con GitHub</h3>'+(ui.loadErr==='token'?'<div class="note bad" role="alert">El token no sirve o venció. Pegá uno nuevo.</div>':'<div class="muted sm">Para guardar y publicar desde esta página hace falta un token de GitHub. Queda guardado solo en este teléfono.</div>')+'<label class="field">Repositorio<input type="text" id="repo" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="usuario/repositorio" value="'+esc(REPO)+'"></label><label class="field">Token<input type="password" id="tok" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Pegá el token acá"></label><div><button class="btn primary" data-act="connect">Conectar</button></div><details class="more"><summary>Cómo crear el token</summary><ol class="how"><li>En GitHub tocá tu foto → <b>Settings</b> → <b>Developer settings</b> (al final del menú) → <b>Personal access tokens</b> → <b>Fine-grained tokens</b> → <b>Generate new token</b>.</li><li>Ponele un nombre, por ejemplo “Club”, y la expiración más larga.</li><li>En <b>Repository access</b> elegí <b>Only select repositories</b> y marcá el repositorio del sitio.</li><li>En <b>Repository permissions</b> poné <b>Contents: Read and write</b>.</li><li>Tocá <b>Generate token</b>, copialo y pegalo arriba.</li></ol></details></div>';
 }
 function resultCard(){
@@ -393,8 +410,9 @@ function render(){
   let body;
   if(ui.loading)body='<div class="card muted">Cargando…</div>';
   else if(!D)body=errorCard();
+  else if(!unlocked())body=gateCard();
   else body=views[ui.tab]();
-  $('#app').innerHTML=headerHtml()+'<main class="in main">'+body+'</main>'+(D?'<nav class="tabs" aria-label="Secciones"><div class="in">'+tabs.map(t=>'<button class="tab" data-tab="'+t[0]+'" aria-current="'+(t[0]===ui.tab?'page':'false')+'">'+t[1]+'</button>').join('')+'</div></nav>':'');
+  $('#app').innerHTML=headerHtml()+'<main class="in main">'+body+'</main>'+(D&&unlocked()?'<nav class="tabs" aria-label="Secciones"><div class="in">'+tabs.map(t=>'<button class="tab" data-tab="'+t[0]+'" aria-current="'+(t[0]===ui.tab?'page':'false')+'">'+t[1]+'</button>').join('')+'</div></nav>':'');
   if(D&&D.club)document.title=D.club+' · Entrenador';
 }
 
@@ -415,12 +433,16 @@ async function load(){
     D=null;ui.connected=false;
     ui.loadErr=(e&&(e.status===401||e.status===403))?'token':'red';
   }
-  ui.loading=false;render();
+  ui.loading=false;
+  applyPendingCoach();
+  render();
+  tryScan();
+}
+function tryScan(){
   const code=(location.hash||'').replace(/^#/,'');
-  if(D&&code){
-    if(ui.connected){clearHash();processScan(code);}
-    else toast('Conectá GitHub para registrar con la etiqueta.','warn');
-  }
+  if(!D||!code||!unlocked())return;
+  if(ui.connected){clearHash();processScan(code);}
+  else toast('Conectá GitHub para registrar con la etiqueta.','warn');
 }
 
 /* ---------- Eventos ---------- */
@@ -441,6 +463,7 @@ const A={
     await load();
     if(ui.connected)toast('Conectado. Ya podés cargar y publicar.','ok');
   },
+  'coach-out':()=>{ls.del('club-coach');render();},
   disconnect:()=>{TOKEN='';ls.del('club-tok');ui.connected=false;ui.loadErr='';load();},
   'copy-link':async b=>{
     const s=stu(b.dataset.key);if(!s)return;
@@ -481,6 +504,21 @@ document.addEventListener('click',e=>{
   if(b&&A[b.dataset.act])A[b.dataset.act](b);
 });
 document.addEventListener('submit',async e=>{
+  if(e.target.id==='gate'){
+    e.preventDefault();
+    if(!(window.crypto&&crypto.subtle)){ui.gateErr='Abrí el sitio con https para poder entrar.';render();return;}
+    const u=($('#gate-user').value||'').trim();
+    if(!normTokens(u).length){ui.gateErr='Escribí tu usuario.';render();return;}
+    if(D.coach&&D.coach.h){
+      if(await userHash(D.coach.s,u)!==D.coach.h){ui.gateErr='Ese usuario no es correcto.';render();return;}
+      ls.set('club-coach',D.coach.h);
+    }else{
+      const salt=rnd(16),h=await userHash(salt,u);
+      ls.set('club-coach-new',JSON.stringify({s:salt,h:h}));ls.set('club-coach',h);
+      applyPendingCoach();
+    }
+    ui.gateErr='';render();tryScan();return;
+  }
   if(e.target.id!=='add-form')return;
   e.preventDefault();
   if(needConn())return;

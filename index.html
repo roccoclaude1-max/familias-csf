@@ -95,6 +95,11 @@ select:focus-visible,input:focus-visible,button:focus-visible{outline:3px solid 
 .tab{border:0;background:none;color:var(--muted);font:700 18px var(--display);letter-spacing:.05em;text-transform:uppercase;padding:14px 2px 12px;min-height:52px;cursor:pointer;box-shadow:inset 0 4px 0 transparent}
 .tab[aria-current=page]{color:var(--accent);box-shadow:inset 0 4px 0 var(--gold)}
 .foot{font-size:12px;color:var(--muted);text-align:center;padding:4px 0}
+
+.who-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:380px){.who-grid{grid-template-columns:1fr}}
+.btn.big{min-height:96px;font:700 30px var(--display);letter-spacing:.04em;text-transform:uppercase;text-decoration:none}
+.band .out+.out{margin-left:8px}
 </style>
 </head>
 <body>
@@ -115,7 +120,7 @@ const sgn=n=>(n>0?'+':'')+n;
 
 let D=null,kids=[];
 try{kids=JSON.parse(ls.get('club-hijos')||'[]');if(!Array.isArray(kids))kids=[];}catch(e){kids=[];}
-const ui={tab:'att',kid:kids[0]||'',all:false,err:'',adding:false,choose:null,loading:true,fail:false,busy:false};
+const ui={role:'',tab:'att',kid:kids[0]||'',all:false,err:'',adding:false,choose:null,loading:true,fail:false,busy:false};
 
 const CREST='<svg class="crest" viewBox="0 0 60 72" aria-hidden="true"><defs><clipPath id="sh"><path d="M4 4H56V38C56 54 44 64 30 70C16 64 4 54 4 38Z"/></clipPath></defs><g clip-path="url(#sh)"><rect width="60" height="72" fill="#2f8a3e"/><rect x="21" width="18" height="72" fill="#ffffff"/><rect y="18" width="60" height="18" fill="#ffffff"/><rect x="24.5" width="11" height="72" fill="#1b4585"/><rect y="21.5" width="60" height="11" fill="#1b4585"/><circle cx="30" cy="27" r="11" fill="#ffffff"/><circle cx="30" cy="27" r="8.5" fill="none" stroke="#e1b02b" stroke-width="2"/></g><path d="M4 4H56V38C56 54 44 64 30 70C16 64 4 54 4 38Z" fill="none" stroke="#e1b02b" stroke-width="3.5" stroke-linejoin="round"/></svg>';
 
@@ -146,6 +151,9 @@ function addKid(key){
   saveKids();ui.kid=key;ui.adding=false;ui.choose=null;ui.err='';ui.tab='att';
 }
 
+function homeCard(){
+  return '<section class="stack"><h2 class="h">¿Quién sos?</h2><div class="who-grid"><button class="btn primary big" data-act="role-alumno">Alumno</button><a class="btn big" href="entrenador.html">Entrenador</a></div><div class="muted sm">Familias y alumnos: entrá con el nombre. Entrenadores: entrá con tu usuario.</div></section>';
+}
 function loginCard(){
   if(ui.choose)return '<div class="card stack"><h3 style="margin:0">¿Cuál de ellos?</h3><div class="choose">'+ui.choose.map(s=>'<button class="btn" data-act="pick" data-key="'+esc(s.h[0])+'">'+esc(s.l)+'</button>').join('')+'</div></div>';
   return '<form class="card stack" id="login" style="gap:12px"><div><h3 style="margin:0 0 4px">Entrá con el nombre de tu hijo o hija</h3><div class="muted sm">Escribí nombre y apellido, como figura en el club. Después te recordamos en este teléfono.</div></div><label class="field">Nombre y apellido<input type="text" id="nm" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="go"></label>'+(ui.err?'<div class="note bad" role="alert">'+esc(ui.err)+'</div>':'')+'<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" type="submit"'+(ui.busy?' disabled':'')+'>Entrar</button>'+(ui.adding?'<button class="btn ghost" type="button" data-act="cancel-add">Cancelar</button>':'')+'</div></form>';
@@ -178,13 +186,14 @@ function updated(){
 function render(){
   const mine=myKids(),logged=mine.length>0&&!!D;
   let body;
-  if(ui.loading)body='<div class="card muted">Cargando…</div>';
+  if(!ui.role)body=homeCard();
+  else if(ui.loading)body='<div class="card muted">Cargando…</div>';
   else if(ui.fail)body='<div class="card stack"><div>No pudimos cargar los datos. Revisá tu conexión.</div><div><button class="btn primary" data-act="retry">Reintentar</button></div></div>';
   else if(!D.students.length)body='<div class="card muted">Todavía no hay datos. El profe los va a cargar pronto.</div>';
   else if(!logged)body=loginCard();
   else body=ui.tab==='rank'?viewRank(mine):viewAtt(mine);
-  const showBar=logged&&!ui.loading&&!ui.fail;
-  $('#app').innerHTML='<header class="band"><div class="in">'+CREST+'<div class="ttl"><div class="club">'+esc(D&&D.club?D.club:'Club')+'</div><div class="who">Familias</div></div>'+(logged?'<button class="out" data-act="logout">Salir</button>':'')+'</div></header><main class="in main'+(showBar?'':' nobar')+'">'+body+(showBar?updated():'')+'</main>'+(showBar?'<nav class="tabs" aria-label="Secciones"><div class="in"><button class="tab" data-tab="att" aria-current="'+(ui.tab==='att'?'page':'false')+'">Asistencia</button><button class="tab" data-tab="rank" aria-current="'+(ui.tab==='rank'?'page':'false')+'">Ranking</button></div></nav>':'');
+  const showBar=ui.role&&logged&&!ui.loading&&!ui.fail;
+  $('#app').innerHTML='<header class="band"><div class="in">'+CREST+'<div class="ttl"><div class="club">'+esc(D&&D.club?D.club:'Club')+'</div><div class="who">Familias</div></div>'+(ui.role?'<button class="out" data-act="home">Inicio</button>':'')+(ui.role&&logged?'<button class="out" data-act="logout">Salir</button>':'')+'</div></header><main class="in main'+(showBar?'':' nobar')+'">'+body+(showBar?updated():'')+'</main>'+(showBar?'<nav class="tabs" aria-label="Secciones"><div class="in"><button class="tab" data-tab="att" aria-current="'+(ui.tab==='att'?'page':'false')+'">Asistencia</button><button class="tab" data-tab="rank" aria-current="'+(ui.tab==='rank'?'page':'false')+'">Ranking</button></div></nav>':'');
 }
 async function load(){
   ui.loading=true;ui.fail=false;render();
@@ -201,6 +210,8 @@ async function load(){
 }
 const A={
   retry:()=>load(),
+  'role-alumno':()=>{ui.role='alumno';render();const i=$('#nm');if(i)i.focus();},
+  home:()=>{ui.role='';ui.adding=false;ui.err='';ui.choose=null;render();},
   all:()=>{ui.all=!ui.all;render();},
   add:()=>{ui.adding=true;ui.err='';render();const i=$('#nm');if(i)i.focus();},
   'cancel-add':()=>{ui.adding=false;ui.err='';render();},
