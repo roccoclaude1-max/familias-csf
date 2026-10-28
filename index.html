@@ -128,8 +128,8 @@ const CREST='<svg class="crest" viewBox="0 0 60 72" aria-hidden="true"><defs><cl
 
 const find=key=>D&&D.students.find(s=>s.h[0]===key);
 const myKids=()=>kids.map(find).filter(Boolean);
-function ranking(){
-  const rows=D.students.map(s=>({s,p:s.p||0,a:(s.a||[]).length}));
+function ranking(g){
+  const rows=D.students.filter(s=>(s.g||'')===(g||'')).map(s=>({s,p:s.p||0,a:(s.a||[]).length}));
   rows.sort((x,y)=>y.p-x.p||y.a-x.a||x.s.l.localeCompare(y.s.l,'es'));
   let pos=0,prev=null;
   rows.forEach((r,i)=>{if(r.p!==prev){pos=i+1;prev=r.p;}r.pos=pos;});
@@ -166,7 +166,7 @@ function viewAtt(mine){
   let h='<section class="stack"><h2 class="h">Asistencia</h2>';
   if(mine.length>1)h+='<label class="field">Alumno<select id="kid">'+mine.map(s=>'<option value="'+esc(s.h[0])+'"'+(s===sel?' selected':'')+'>'+esc(s.l)+'</option>').join('')+'</select></label>';
   const set=new Set(sel.a||[]),n=ds.length,a=ds.filter(d=>set.has(d)).length,pct=n?Math.round(a/n*100):0;
-  const rk=ranking().find(r=>r.s===sel);
+  const rk=ranking(sel.g).find(r=>r.s===sel);
   const rev=ds.slice().reverse(),shown=ui.all?rev:rev.slice(0,10);
   h+='<div class="card stack"><div class="kn">'+esc(sel.l)+'</div><div class="stats"><div class="tile"><b>'+pct+'%</b><span>Asistencia</span></div><div class="tile"><b>'+(sel.p||0)+'</b><span>Puntos</span></div><div class="tile"><b>'+(rk?rk.pos+'º':'–')+'</b><span>Puesto</span></div></div><div class="meter" role="img" aria-label="Asistió a '+a+' de '+n+' clases"><i style="width:'+pct+'%"></i></div><div class="muted sm">'+(n?'Asistió a '+a+' de '+n+' clases.':'Todavía no se registraron clases.')+'</div></div>';
   if(n)h+='<div class="card flush"><h3 style="margin-top:8px">Clases</h3><ul class="list">'+shown.map(d=>'<li class="cls"><span>'+esc(dShort(d))+'</span><span class="tag '+(set.has(d)?'ok':'no')+'">'+(set.has(d)?'Presente':'Ausente')+'</span></li>').join('')+'</ul>'+(rev.length>10?'<div style="padding:4px 0 8px"><button class="btn ghost sm" data-act="all">'+(ui.all?'Ver menos':'Ver las '+rev.length+' clases')+'</button></div>':'')+'</div>';
@@ -176,9 +176,15 @@ function viewAtt(mine){
   if(ui.adding)h+=loginCard();
   return h+'</section>';
 }
+function rankList(rows,mine){
+  const max=Math.max(1,...rows.map(r=>r.p));
+  return '<div class="card flush"><ul class="list">'+(rows.length?rows.map(r=>'<li class="rk'+(mine.indexOf(r.s)>-1?' me':'')+'"><span class="pos'+(r.pos<=3&&r.p>0?' top':'')+'">'+r.pos+'</span><div><div class="rk-name">'+esc(r.s.l)+'</div><div class="bar"><i style="width:'+Math.round(Math.max(0,r.p)/max*100)+'%"></i></div><div class="muted sm">'+r.a+' asistencias</div></div><div class="rk-pts">'+r.p+'<small>pts</small></div></li>').join(''):'<li class="empty">Todavía no hay puntos cargados.</li>')+'</ul></div>';
+}
 function viewRank(mine){
-  const rows=ranking(),max=Math.max(1,...rows.map(r=>r.p));
-  return '<section class="stack"><h2 class="h">Ranking</h2><div class="card flush"><ul class="list">'+(rows.length?rows.map(r=>'<li class="rk'+(mine.indexOf(r.s)>-1?' me':'')+'"><span class="pos'+(r.pos<=3&&r.p>0?' top':'')+'">'+r.pos+'</span><div><div class="rk-name">'+esc(r.s.l)+'</div><div class="bar"><i style="width:'+Math.round(Math.max(0,r.p)/max*100)+'%"></i></div><div class="muted sm">'+r.a+' asistencias</div></div><div class="rk-pts">'+r.p+'<small>pts</small></div></li>').join(''):'<li class="empty">Todavía no hay puntos cargados.</li>')+'</ul></div></section>';
+  const gs=[...new Set(mine.map(s=>s.g||''))].sort((a,b)=>a.localeCompare(b,'es'));
+  let h='<section class="stack"><h2 class="h">Ranking</h2>';
+  gs.forEach(g=>{h+=(g?'<h3 style="margin:6px 0 0">'+esc(g)+'</h3>':'')+rankList(ranking(g),mine);});
+  return h+'</section>';
 }
 function updated(){
   if(!D||!D.updated)return '';
