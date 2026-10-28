@@ -134,6 +134,11 @@ ol.how b{color:var(--fg);font-weight:600}
 .toast.warn{background:var(--gold);color:var(--gold-fg)}
 .toast.bad{background:var(--bad);color:#fff}
 @media (prefers-reduced-motion:reduce){.toast{transition:none}}
+.gtag{display:inline-block;font-size:12px;font-weight:600;background:var(--surface2);color:var(--muted);border-radius:99px;padding:1px 9px;margin-left:6px;vertical-align:middle}
+.pw-hint{font-size:13px;color:var(--muted)}
+.chk{display:flex;gap:10px;align-items:center;font-size:15px;color:var(--fg)}
+.chk input{width:22px;min-height:22px;height:22px;flex:none}
+.tabs .in{grid-auto-columns:1fr}
 </style>
 </head>
 <body>
@@ -142,18 +147,18 @@ ol.how b{color:var(--fg);font-weight:600}
 <script>
 (function(){
 'use strict';
-/* El panel lee y escribe datos.json en el repositorio de GitHub con un token que queda solo en este teléfono.
-   Los nombres completos no se guardan: solo la etiqueta abreviada y una huella para el ingreso de las familias. */
+/* Panel de entrenadores. Cada entrenador entra con usuario y contraseña.
+   La contraseña abre (descifra) el token de GitHub que guarda entrenadores.json, y con ese token el panel lee y escribe datos.json.
+   Los nombres completos de los alumnos no se guardan: solo la etiqueta abreviada y una huella para el ingreso de las familias. */
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ls={get(k){try{return localStorage.getItem(k);}catch(e){return null;}},set(k,v){try{localStorage.setItem(k,v);}catch(e){}},del(k){try{localStorage.removeItem(k);}catch(e){}}};
 const today=()=>new Date().toLocaleDateString('sv-SE');
-const hm=ts=>new Date(ts).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
 const dShort=d=>new Date(d+'T12:00:00').toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short'}).replace(/\./g,'');
 const sgn=n=>(n>0?'+':'')+n;
 const rnd=n=>{let s='';while(s.length<n)s+=Math.random().toString(36).slice(2);return s.slice(0,n);};
 
-/* ---------- Nombres: etiqueta y huella ---------- */
+/* ---------- Nombres, huellas y cifrado ---------- */
 const COMB=new RegExp('['+String.fromCharCode(768)+'-'+String.fromCharCode(879)+']','g');
 const normTokens=s=>String(s).normalize('NFD').replace(COMB,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim().split(' ').filter(Boolean).sort();
 async function sha(t){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t));return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join('');}
@@ -163,89 +168,103 @@ async function nameHashes(name){
   if(raw.length>=3){const h=await sha(D.salt+'|'+normTokens(raw[0]+' '+raw[raw.length-1]).join(' '));if(out.indexOf(h)<0)out.push(h);}
   return out;
 }
+const toB64=u8=>{let s='';for(let i=0;i<u8.length;i++)s+=String.fromCharCode(u8[i]);return btoa(s);};
+const fromB64=b=>{const s=atob(b),u=new Uint8Array(s.length);for(let i=0;i<s.length;i++)u[i]=s.charCodeAt(i);return u;};
+async function deriveKey(pw,salt){
+  const km=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt:salt,iterations:150000,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+}
+async function seal(pw,obj){
+  const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));
+  const k=await deriveKey(pw,salt);
+  const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv:iv},k,new TextEncoder().encode(JSON.stringify(obj)));
+  return{s:toB64(salt),iv:toB64(iv),ct:toB64(new Uint8Array(ct))};
+}
+async function unseal(pw,rec){
+  const k=await deriveKey(pw,fromB64(rec.s));
+  const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:fromB64(rec.iv)},k,fromB64(rec.ct));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+const userId=u=>sha('usr|'+normTokens(u).join(' '));
 const cap=w=>w.charAt(0).toUpperCase()+w.slice(1);
 function makeLabel(name,skipId){
   const p=name.trim().split(/\s+/),first=cap(p[0]||''),last=p.length>1?cap(p[p.length-1]):'';
   const used=new Set(D.students.filter(s=>s!==skipId).map(s=>s.l));
   if(!last)return used.has(first)?first+' (2)':first;
-  for(let k=1;k<=last.length;k++){
-    const c=first+' '+last.slice(0,k)+(k<last.length?'.':'');
-    if(!used.has(c))return c;
-  }
+  for(let k=1;k<=last.length;k++){const c=first+' '+last.slice(0,k)+(k<last.length?'.':'');if(!used.has(c))return c;}
   return first+' '+last+' (2)';
 }
 const mkCode=()=>{let c;do{c='a'+rnd(7);}while(D.students.some(s=>s.c===c));return c;};
 
-/* ---------- Conexión con GitHub ---------- */
+/* ---------- GitHub ---------- */
 function guessRepo(){
-  const saved=ls.get('club-repo');
-  if(saved&&saved.indexOf('/')>0)return saved;
   const h=location.hostname;
   if(/\.github\.io$/.test(h)){const repo=location.pathname.split('/')[1];if(repo)return h.split('.')[0]+'/'+repo;}
-  return '';
+  return ls.get('club-repo')||'';
 }
-let REPO=guessRepo(),TOKEN=ls.get('club-tok')||'',SHA=null,D=null;
+let REPO=guessRepo(),TOKEN=ls.get('club-tok')||'',ME=null,D=null,SHA=null,COACHES=[],CSHA=null;
 const API='https://api.github.com/repos/';
 const hdr=()=>({'Accept':'application/vnd.github+json','Authorization':'Bearer '+TOKEN});
 const b64e=s=>btoa(unescape(encodeURIComponent(s)));
 const b64d=s=>decodeURIComponent(escape(atob(s.replace(/\s/g,''))));
-async function ghGet(){
-  const r=await fetch(API+REPO+'/contents/datos.json',{headers:hdr(),cache:'no-store'});
+const httpErr=st=>{const e=new Error('http');e.status=st;return e;};
+async function ghGetF(path,tok,repo){
+  const h=tok?{'Accept':'application/vnd.github+json','Authorization':'Bearer '+tok}:hdr();
+  const r=await fetch(API+(repo||REPO)+'/contents/'+path,{headers:h,cache:'no-store'});
   if(r.status===404)return{missing:true};
-  if(!r.ok){const e=new Error('http');e.status=r.status;throw e;}
+  if(!r.ok)throw httpErr(r.status);
   const j=await r.json();
   return{sha:j.sha,data:JSON.parse(b64d(j.content))};
 }
-async function ghPut(text){
-  const body={message:'Actualizar datos ('+today()+')',content:b64e(text)};
-  if(SHA)body.sha=SHA;
-  const r=await fetch(API+REPO+'/contents/datos.json',{method:'PUT',headers:Object.assign({'Content-Type':'application/json'},hdr()),body:JSON.stringify(body)});
-  if(!r.ok){const e=new Error('http');e.status=r.status;throw e;}
+async function ghPutF(path,text,sha,msg){
+  const body={message:msg,content:b64e(text)};
+  if(sha)body.sha=sha;
+  const r=await fetch(API+REPO+'/contents/'+path,{method:'PUT',headers:Object.assign({'Content-Type':'application/json'},hdr()),body:JSON.stringify(body)});
+  if(!r.ok)throw httpErr(r.status);
   const j=await r.json();
-  SHA=j.content&&j.content.sha;
+  return j.content&&j.content.sha;
 }
+async function loadCoaches(){
+  const g=await ghGetF('entrenadores.json');
+  if(g.missing){COACHES=[];CSHA=null;}else{COACHES=Array.isArray(g.data.coaches)?g.data.coaches:[];CSHA=g.sha;}
+}
+async function saveCoaches(){CSHA=await ghPutF('entrenadores.json',JSON.stringify({v:1,coaches:COACHES},null,1),CSHA,'Actualizar entrenadores');}
 
 /* ---------- Estado ---------- */
 let cfg={mode:'att',amount:1,reason:''};
 try{cfg=Object.assign(cfg,JSON.parse(ls.get('club-cfg')||'{}'));}catch(e){}
 const saveCfg=()=>ls.set('club-cfg',JSON.stringify(cfg));
-const ui={tab:'reg',day:today(),sel:'',q:'',confirm:null,editing:null,loading:true,loadErr:'',connected:false,save:'saved',showLink:null,newName:'',result:null,all:false,showJson:false,undo:[],gateErr:''};
+const ui={tab:'reg',day:today(),sel:'',q:'',grp:'',confirm:null,editing:null,loading:true,bootErr:false,err:'',connected:false,save:'saved',showLink:null,newName:'',newGroup:'',result:null,all:false,showJson:false,undo:[],busy:false,notice:''};
 function emptyData(){return{v:1,club:'Mi club',salt:'',updated:'',classes:[],students:[]};}
 function normalizeData(d){
   if(!d||!Array.isArray(d.students))d=emptyData();
   d.club=d.club||'Mi club';d.salt=d.salt||'';d.classes=Array.isArray(d.classes)?d.classes:[];
-  d.students.forEach(s=>{s.a=Array.isArray(s.a)?s.a:[];s.p=s.p||0;s.r=Array.isArray(s.r)?s.r:[];s.h=Array.isArray(s.h)?s.h:[];s.l=s.l||'Alumno';});
+  d.students.forEach(s=>{s.a=Array.isArray(s.a)?s.a:[];s.p=s.p||0;s.r=Array.isArray(s.r)?s.r:[];s.h=Array.isArray(s.h)?s.h:[];s.l=s.l||'Alumno';s.g=s.g||'';});
   const seen=new Set();
   d.students.forEach(s=>{if(!s.c||seen.has(s.c))s.c='a'+rnd(7);seen.add(s.c);});
   return d;
 }
-const stu=key=>D&&D.students.find(s=>s.c===key);
-/* ---------- Usuario del entrenador (filtro, no seguridad: lo que protege los datos es el token) ---------- */
-const userHash=(salt,u)=>sha(salt+'|usr|'+normTokens(u).join(' '));
-function pendingCoach(){try{return JSON.parse(ls.get('club-coach-new')||'null');}catch(e){return null;}}
-function unlocked(){
-  if(!D)return false;
-  if(D.coach&&D.coach.h)return ls.get('club-coach')===D.coach.h;
-  return !!pendingCoach();
+const allowed=s=>!!ME&&(ME.adm||ME.g.indexOf(s.g||'')>-1);
+const stu=key=>D&&D.students.find(s=>s.c===key&&allowed(s));
+const mine=()=>D.students.filter(allowed);
+const vis=()=>mine().filter(s=>!ui.grp||(s.g||'')===ui.grp);
+const groupsList=()=>ME.adm?[...new Set(D.students.map(s=>s.g||'').filter(Boolean))].sort():ME.g.filter(Boolean);
+const classDates=g=>[...new Set(D.students.filter(s=>(s.g||'')===(g||'')).reduce((a,s)=>a.concat(s.a),[]))].sort();
+function recompute(){
+  const gs=[...new Set(D.students.map(s=>s.g||''))],cg={};
+  gs.forEach(g=>{cg[g]=classDates(g);});
+  D.cg=cg;D.classes=[...new Set(D.students.reduce((a,s)=>a.concat(s.a),[]))].sort();
 }
-function applyPendingCoach(){
-  const pc=pendingCoach();
-  if(ui.connected&&D&&pc&&!(D.coach&&D.coach.h)){D.coach={s:pc.s,h:pc.h};touch(300);}
-}
-function gateCard(){
-  const first=!(D.coach&&D.coach.h);
-  return '<section class="stack"><h2 class="h">'+(first?'Creá tu usuario':'Entrenador')+'</h2><form class="card stack" id="gate" style="gap:12px"><div class="muted sm">'+(first?'Elegí un usuario para el panel del entrenador. Lo vas a usar cada vez que entres desde un teléfono nuevo.':'Escribí tu usuario para entrar al panel.')+'</div><label class="field">Usuario<input type="text" id="gate-user" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go"></label>'+(ui.gateErr?'<div class="note bad" role="alert">'+esc(ui.gateErr)+'</div>':'')+'<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" type="submit">'+(first?'Crear usuario':'Entrar')+'</button><a class="btn ghost" href="./">Volver al inicio</a></div></form></section>';
-}
-const dates=()=>[...new Set(D.students.reduce((a,s)=>a.concat(s.a),[]))].sort();
 function ranking(){
-  const rows=D.students.map(s=>({s,p:s.p||0,a:s.a.length}));
+  const rows=vis().map(s=>({s,p:s.p||0,a:s.a.length}));
   rows.sort((x,y)=>y.p-x.p||y.a-x.a||x.s.l.localeCompare(y.s.l,'es'));
   let pos=0,prev=null;
   rows.forEach((r,i)=>{if(r.p!==prev){pos=i+1;prev=r.p;}r.pos=pos;});
   return rows;
 }
-const byLabel=()=>D.students.slice().sort((a,b)=>a.l.localeCompare(b.l,'es'));
+const byLabel=()=>vis().sort((a,b)=>a.l.localeCompare(b.l,'es'));
 const tagUrl=s=>location.href.split('#')[0]+'#'+s.c;
+const gtag=s=>s.g?'<span class="gtag">'+esc(s.g)+'</span>':'';
 
 /* ---------- Guardado ---------- */
 let dirty=false,timer=null,flushing=false;
@@ -257,11 +276,11 @@ async function flush(){
   clearTimeout(timer);flushing=true;
   while(dirty){
     dirty=false;setSave('saving');
-    D.classes=dates();D.updated=new Date().toISOString();
-    try{await ghPut(JSON.stringify(D,null,1));setSave(dirty?'pending':'saved');}
+    recompute();D.updated=new Date().toISOString();
+    try{SHA=await ghPutF('datos.json',JSON.stringify(D,null,1),SHA,'Actualizar datos ('+today()+')');setSave(dirty?'pending':'saved');}
     catch(e){
       dirty=true;flushing=false;setSave('error');
-      toast(e.status===409||e.status===422?'Hay cambios nuevos en GitHub. Recargá la página para verlos.':(e.status===401||e.status===403)?'El token no tiene permiso o venció.':'No se pudo guardar. Revisá la conexión y tocá “Reintentar”.','bad');
+      toast(e.status===409||e.status===422?'Hay cambios nuevos en GitHub. Recargá la página para verlos.':(e.status===401||e.status===403)?'El token no tiene permiso o venció. Avisale al administrador.':'No se pudo guardar. Revisá la conexión y tocá “Reintentar”.','bad');
       return;
     }
   }
@@ -277,11 +296,10 @@ async function copyText(t){
   try{const ta=document.createElement('textarea');ta.value=t;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.select();const ok=document.execCommand('copy');ta.remove();return !!ok;}catch(e){return false;}
 }
 function feedback(kind){try{if(navigator.vibrate)navigator.vibrate(kind==='ok'?70:[50,40,50]);}catch(e){}}
-const needConn=()=>{if(ui.connected)return false;toast('Primero conectá GitHub en la pestaña Alumnos.','warn');return true;};
 
-/* ---------- Acciones del entrenador ---------- */
+/* ---------- Acciones ---------- */
 function mark(s,mode,scan){
-  if(needConn())return;
+  if(!allowed(s)){toast('Ese alumno es de otro grupo.','warn');return;}
   const day=scan?today():ui.day;
   let r;
   if(mode==='att'){
@@ -302,8 +320,10 @@ function mark(s,mode,scan){
   feedback(r.kind);touch(scan?300:2500);render();
 }
 function processScan(code){
+  const s0=D.students.find(s=>s.c===code);
+  if(!s0){toast('Esa etiqueta no corresponde a ningún alumno.','warn');return;}
   const s=stu(code);
-  if(!s){toast('Esa etiqueta no corresponde a ningún alumno.','warn');return;}
+  if(!s){toast(s0.l+' es de otro grupo.','warn');return;}
   let last=null;try{last=JSON.parse(ls.get('club-lastscan')||'null');}catch(e){}
   ui.tab='reg';
   if(last&&last.code===code&&Date.now()-last.at<25000){render();return;}
@@ -311,30 +331,40 @@ function processScan(code){
   mark(s,cfg.mode,true);
 }
 function clearHash(){try{history.replaceState(null,'',location.pathname+location.search);}catch(e){try{location.hash='';}catch(e2){}}}
-async function addStudent(full){
-  full=full.trim().replace(/\s+/g,' ');
+async function addStudent(full,g){
+  full=full.trim().replace(/\s+/g,' ');g=(g||'').trim();
   if(!full)return 'empty';
-  if(!D.salt&&!D.students.length)D.salt=rnd(24);
+  if(!ME.adm&&ME.g.indexOf(g)<0)return 'group';
   if(!D.salt)D.salt=rnd(24);
   const hs=await nameHashes(full);
   if(D.students.some(s=>s.h[0]===hs[0]))return 'dup';
-  D.students.push({l:makeLabel(full),h:hs,c:mkCode(),a:[],p:0,r:[]});
+  D.students.push({l:makeLabel(full),h:hs,c:mkCode(),g:g,a:[],p:0,r:[]});
   return 'ok';
 }
+const parseGroups=t=>[...new Set(String(t||'').split(',').map(x=>x.trim()).filter(Boolean))];
 
 /* ---------- Vistas ---------- */
 const CREST='<svg class="crest" viewBox="0 0 60 72" aria-hidden="true"><defs><clipPath id="sh"><path d="M4 4H56V38C56 54 44 64 30 70C16 64 4 54 4 38Z"/></clipPath></defs><g clip-path="url(#sh)"><rect width="60" height="72" fill="#2f8a3e"/><rect x="21" width="18" height="72" fill="#ffffff"/><rect y="18" width="60" height="18" fill="#ffffff"/><rect x="24.5" width="11" height="72" fill="#1b4585"/><rect y="21.5" width="60" height="11" fill="#1b4585"/><circle cx="30" cy="27" r="11" fill="#ffffff"/><circle cx="30" cy="27" r="8.5" fill="none" stroke="#e1b02b" stroke-width="2"/></g><path d="M4 4H56V38C56 54 44 64 30 70C16 64 4 54 4 38Z" fill="none" stroke="#e1b02b" stroke-width="3.5" stroke-linejoin="round"/></svg>';
+const inApp=()=>!!(ME&&D&&ui.connected);
 function headerHtml(){
-  return '<header class="band"><div class="in">'+CREST+'<div class="ttl"><div class="club" id="clubtxt">'+esc(D?D.club:'Club')+'</div><div class="who">Entrenador</div></div>'+(ui.connected&&D&&unlocked()?'<button class="chip-save" id="savechip" data-act="save-now" data-st="'+ui.save+'">'+SAVE_TXT[ui.save]+'</button>':'')+'</div></header>';
+  return '<header class="band"><div class="in">'+CREST+'<div class="ttl"><div class="club" id="clubtxt">'+esc(D?D.club:'Club')+'</div><div class="who">Entrenador'+(ME?' · '+esc(ME.n):'')+'</div></div>'+(inApp()?'<button class="chip-save" id="savechip" data-act="save-now" data-st="'+ui.save+'">'+SAVE_TXT[ui.save]+'</button>':'')+'</div></header>';
 }
-function connectCard(){
-  if(ui.connected)return '<div class="card stack" style="gap:10px"><h3 style="margin:0">Conexión con GitHub</h3><div class="note ok">Conectado a <b>'+esc(REPO)+'</b>. Los cambios se publican solos para las familias.</div><div class="acts" style="margin:0"><button class="btn sm ghost" data-act="disconnect">Desconectar este teléfono</button><button class="btn sm ghost" data-act="coach-out">Cerrar sesión</button></div></div>';
-  return '<div class="card stack" style="gap:10px"><h3 style="margin:0">Conectar con GitHub</h3>'+(ui.loadErr==='token'?'<div class="note bad" role="alert">El token no sirve o venció. Pegá uno nuevo.</div>':'<div class="muted sm">Para guardar y publicar desde esta página hace falta un token de GitHub. Queda guardado solo en este teléfono.</div>')+'<label class="field">Repositorio<input type="text" id="repo" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="usuario/repositorio" value="'+esc(REPO)+'"></label><label class="field">Token<input type="password" id="tok" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Pegá el token acá"></label><div><button class="btn primary" data-act="connect">Conectar</button></div><details class="more"><summary>Cómo crear el token</summary><ol class="how"><li>En GitHub tocá tu foto → <b>Settings</b> → <b>Developer settings</b> (al final del menú) → <b>Personal access tokens</b> → <b>Fine-grained tokens</b> → <b>Generate new token</b>.</li><li>Ponele un nombre, por ejemplo “Club”, y la expiración más larga.</li><li>En <b>Repository access</b> elegí <b>Only select repositories</b> y marcá el repositorio del sitio.</li><li>En <b>Repository permissions</b> poné <b>Contents: Read and write</b>.</li><li>Tocá <b>Generate token</b>, copialo y pegalo arriba.</li></ol></details></div>';
+const errNote=()=>ui.err?'<div class="note bad" role="alert">'+esc(ui.err)+'</div>':'';
+function loginCard(){
+  return '<section class="stack"><h2 class="h">Entrenador</h2><form class="card stack" id="login" style="gap:12px"><div class="muted sm">Entrá con tu usuario y contraseña.</div><label class="field">Usuario<input type="text" id="lg-user" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false"></label><label class="field">Contraseña<input type="password" id="lg-pass" autocomplete="current-password"></label>'+errNote()+'<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" type="submit"'+(ui.busy?' disabled':'')+'>'+(ui.busy?'Entrando…':'Entrar')+'</button><a class="btn ghost" href="./">Volver al inicio</a></div><div class="muted sm">Si no tenés usuario, pedíselo a quien administra el club. Un usuario nuevo puede tardar unos minutos en funcionar.</div></form></section>';
+}
+function setupCard(){
+  return '<section class="stack"><h2 class="h">Primera configuración</h2><form class="card stack" id="setup" style="gap:12px"><div class="muted sm">Todavía no hay entrenadores. Vas a ser el administrador: después vas a poder crear usuarios para los demás.</div><label class="field">Repositorio<input type="text" id="su-repo" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="usuario/repositorio" value="'+esc(REPO)+'"></label><label class="field">Token de GitHub<input type="password" id="su-tok" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Pegá el token acá"></label><details class="more"><summary>Cómo crear el token</summary><ol class="how"><li>En GitHub tocá tu foto → <b>Settings</b> → <b>Developer settings</b> → <b>Personal access tokens</b> → <b>Fine-grained tokens</b> → <b>Generate new token</b>.</li><li>Nombre “Club” y la expiración más larga.</li><li><b>Only select repositories</b>: solo el repositorio del sitio.</li><li><b>Contents: Read and write</b>. Generá y copiá el token.</li></ol></details><label class="field">Tu nombre (se ve en el panel)<input type="text" id="su-name" autocomplete="off" maxlength="30"></label><label class="field">Usuario<input type="text" id="su-user" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false"></label><label class="field">Contraseña<input type="password" id="su-pass" autocomplete="new-password"></label><div class="pw-hint">Mínimo 8 caracteres. Usá una frase larga: protege el token de GitHub.</div>'+errNote()+'<div><button class="btn primary" type="submit"'+(ui.busy?' disabled':'')+'>'+(ui.busy?'Creando…':'Crear administrador')+'</button></div></form></section>';
 }
 function resultCard(){
   const r=ui.result;
   if(!r||Date.now()-r.at>120000)return '<div class="card muted">Acá vas a ver el resultado de cada escaneo o marca.</div>';
   return '<div class="card res '+r.kind+'" role="status"><div><div class="res-name">'+esc(r.title)+'</div><div class="muted sm">'+esc(r.detail)+'</div></div></div>';
+}
+function groupChips(){
+  const gs=groupsList();
+  if(gs.length<2)return '';
+  return '<div class="chips" role="group" aria-label="Filtrar por grupo"><button class="chip" data-act="grp" data-g="" aria-pressed="'+(!ui.grp)+'">Todos</button>'+gs.map(g=>'<button class="chip" data-act="grp" data-g="'+esc(g)+'" aria-pressed="'+(ui.grp===g)+'">'+esc(g)+'</button>').join('')+'</div>';
 }
 function rosterRows(){
   const q=ui.q.trim().toLowerCase(),att=cfg.mode==='att';
@@ -343,111 +373,157 @@ function rosterRows(){
   return list.map(s=>{
     const p=s.a.indexOf(ui.day)>-1;
     const btn=att?'<button class="btn '+(p?'ok':'primary')+'" data-act="mark" data-key="'+esc(s.c)+'" aria-pressed="'+p+'">'+(p?'Presente':'Marcar')+'</button>':'<button class="btn gold" data-act="mark" data-key="'+esc(s.c)+'">'+sgn(cfg.amount||0)+'</button>';
-    return '<li class="reg"><div class="rn"><b>'+esc(s.l)+'</b><div class="muted sm">'+(s.p||0)+' pts · '+s.a.length+' asistencias</div></div>'+btn+'</li>';
+    return '<li class="reg"><div class="rn"><b>'+esc(s.l)+'</b>'+gtag(s)+'<div class="muted sm">'+(s.p||0)+' pts · '+s.a.length+' asistencias</div></div>'+btn+'</li>';
   }).join('');
 }
-function emptyStu(){return '<div class="card stack"><div>Todavía no hay alumnos cargados.</div><div><button class="btn primary" data-act="go-stu">Cargar alumnos</button></div></div>';}
+function emptyStu(){return '<div class="card stack"><div>Todavía no hay alumnos cargados'+(ME.adm?'':' en tus grupos')+'.</div><div><button class="btn primary" data-act="go-stu">Cargar alumnos</button></div></div>';}
 function viewReg(){
-  if(!ui.connected)return '<section class="stack"><h2 class="h">Registrar</h2>'+connectCard()+'</section>';
-  if(!D.students.length)return '<section class="stack"><h2 class="h">Registrar</h2>'+emptyStu()+'</section>';
-  const att=cfg.mode==='att',here=D.students.filter(s=>s.a.indexOf(ui.day)>-1).length;
-  let h='<section class="stack"><h2 class="h">Registrar</h2>';
+  if(!mine().length)return '<section class="stack"><h2 class="h">Registrar</h2>'+emptyStu()+'</section>';
+  const att=cfg.mode==='att',v=vis(),here=v.filter(s=>s.a.indexOf(ui.day)>-1).length;
+  let h='<section class="stack"><h2 class="h">Registrar</h2>'+groupChips();
   h+='<div class="seg" role="group" aria-label="Qué registra cada marca"><button data-act="mode" data-mode="att" aria-pressed="'+att+'">Asistencia</button><button data-act="mode" data-mode="pts" aria-pressed="'+!att+'">Puntos</button></div>';
   if(att)h+='<div class="card"><label class="field">Fecha de la clase<input type="date" id="day" value="'+ui.day+'"></label></div>';
   else h+='<div class="card stack" style="gap:12px"><div class="chips" role="group" aria-label="Puntos por marca">'+[1,2,5,10,20].map(n=>'<button class="chip" data-act="amt" data-amt="'+n+'" aria-pressed="'+(cfg.amount===n)+'">+'+n+'</button>').join('')+'</div><div class="grid2"><label class="field">Otra cantidad<input type="number" id="amt-custom" inputmode="numeric" step="1" value="'+cfg.amount+'"></label><label class="field">Motivo (se ve en el sitio de las familias)<input type="text" id="reason" maxlength="60" placeholder="Ej: ganó la ronda" value="'+esc(cfg.reason)+'"></label></div></div>';
   h+=resultCard();
-  if(att)h+='<div class="sum"><b>'+here+'</b> de '+D.students.length+' presentes el '+esc(dShort(ui.day))+'</div>';
-  if(D.students.length>8)h+='<input type="search" id="q" placeholder="Buscar alumno" aria-label="Buscar alumno" value="'+esc(ui.q)+'">';
+  if(att)h+='<div class="sum"><b>'+here+'</b> de '+v.length+' presentes el '+esc(dShort(ui.day))+'</div>';
+  if(v.length>8)h+='<input type="search" id="q" placeholder="Buscar alumno" aria-label="Buscar alumno" value="'+esc(ui.q)+'">';
   h+='<div class="card flush"><ul class="list" id="roster">'+rosterRows()+'</ul></div><div><button class="btn ghost sm" data-act="undo-last">Deshacer el último movimiento</button></div></section>';
   return h;
 }
 function viewAtt(){
-  const ds=dates();
-  if(!D.students.length)return '<section class="stack"><h2 class="h">Asistencia</h2>'+emptyStu()+'</section>';
+  if(!mine().length)return '<section class="stack"><h2 class="h">Asistencia</h2>'+emptyStu()+'</section>';
   const sel=stu(ui.sel);
-  let h='<section class="stack"><h2 class="h">Asistencia</h2><label class="field">Alumno<select id="kid"><option value="">Seleccionar…</option>'+byLabel().map(s=>'<option value="'+esc(s.c)+'"'+(sel&&sel===s?' selected':'')+'>'+esc(s.l)+'</option>').join('')+'</select></label>';
+  let h='<section class="stack"><h2 class="h">Asistencia</h2>'+groupChips()+'<label class="field">Alumno<select id="kid"><option value="">Seleccionar…</option>'+byLabel().map(s=>'<option value="'+esc(s.c)+'"'+(sel&&sel===s?' selected':'')+'>'+esc(s.l)+'</option>').join('')+'</select></label>';
   if(sel){
-    const set=new Set(sel.a),n=ds.length,a=ds.filter(d=>set.has(d)).length,pct=n?Math.round(a/n*100):0;
+    const ds=classDates(sel.g),set=new Set(sel.a),n=ds.length,a=ds.filter(d=>set.has(d)).length,pct=n?Math.round(a/n*100):0;
     const rk=ranking().find(r=>r.s===sel),rev=ds.slice().reverse(),shown=ui.all?rev:rev.slice(0,10);
-    h+='<div class="card stack"><div class="kn">'+esc(sel.l)+'</div><div class="stats"><div class="tile"><b>'+pct+'%</b><span>Asistencia</span></div><div class="tile"><b>'+(sel.p||0)+'</b><span>Puntos</span></div><div class="tile"><b>'+(rk?rk.pos+'º':'–')+'</b><span>Puesto</span></div></div><div class="meter" role="img" aria-label="Asistió a '+a+' de '+n+' clases"><i style="width:'+pct+'%"></i></div><div class="muted sm">'+(n?'Asistió a '+a+' de '+n+' clases.':'Todavía no se registraron clases.')+'</div></div>';
+    h+='<div class="card stack"><div class="kn">'+esc(sel.l)+gtag(sel)+'</div><div class="stats"><div class="tile"><b>'+pct+'%</b><span>Asistencia</span></div><div class="tile"><b>'+(sel.p||0)+'</b><span>Puntos</span></div><div class="tile"><b>'+(rk?rk.pos+'º':'–')+'</b><span>Puesto</span></div></div><div class="meter" role="img" aria-label="Asistió a '+a+' de '+n+' clases"><i style="width:'+pct+'%"></i></div><div class="muted sm">'+(n?'Asistió a '+a+' de '+n+' clases.':'Todavía no se registraron clases.')+'</div></div>';
     if(n)h+='<div class="card flush"><h3 style="margin-top:8px">Clases</h3><ul class="list">'+shown.map(d=>'<li class="cls"><span>'+esc(dShort(d))+'</span><span class="tag '+(set.has(d)?'ok':'no')+'">'+(set.has(d)?'Presente':'Ausente')+'</span></li>').join('')+'</ul>'+(rev.length>10?'<div style="padding:4px 0 8px"><button class="btn ghost sm" data-act="all">'+(ui.all?'Ver menos':'Ver las '+rev.length+' clases')+'</button></div>':'')+'</div>';
-  }else if(ds.length){
-    const last=ds[ds.length-1],c=D.students.filter(s=>s.a.indexOf(last)>-1).length;
-    h+='<div class="card"><div class="muted sm">Última clase</div><div class="kn" style="margin:2px 0 4px">'+esc(dShort(last))+'</div><div class="muted">'+c+' de '+D.students.length+' alumnos presentes.</div></div>';
   }
   return h+'</section>';
 }
 function viewRank(){
   const rows=ranking(),max=Math.max(1,...rows.map(r=>r.p));
-  return '<section class="stack"><h2 class="h">Ranking</h2><div class="card flush"><ul class="list">'+(rows.length?rows.map(r=>'<li class="rk"><span class="pos'+(r.pos<=3&&r.p>0?' top':'')+'">'+r.pos+'</span><div><div class="rk-name">'+esc(r.s.l)+'</div><div class="bar"><i style="width:'+Math.round(Math.max(0,r.p)/max*100)+'%"></i></div><div class="muted sm">'+r.a+' asistencias</div></div><div class="rk-pts">'+r.p+'<small>pts</small></div></li>').join(''):'<li class="empty">Cuando se carguen alumnos y puntos, el ranking aparece acá.</li>')+'</ul></div></section>';
+  return '<section class="stack"><h2 class="h">Ranking</h2>'+groupChips()+'<div class="card flush"><ul class="list">'+(rows.length?rows.map(r=>'<li class="rk"><span class="pos'+(r.pos<=3&&r.p>0?' top':'')+'">'+r.pos+'</span><div><div class="rk-name">'+esc(r.s.l)+gtag(r.s)+'</div><div class="bar"><i style="width:'+Math.round(Math.max(0,r.p)/max*100)+'%"></i></div><div class="muted sm">'+r.a+' asistencias</div></div><div class="rk-pts">'+r.p+'<small>pts</small></div></li>').join(''):'<li class="empty">Cuando se carguen alumnos y puntos, el ranking aparece acá.</li>')+'</ul></div></section>';
+}
+function groupField(id,val){
+  if(ME.adm)return '<input type="text" id="'+id+'" list="'+id+'-l" maxlength="30" placeholder="Grupo o clase (ej: Sub 12)" value="'+esc(val)+'" autocomplete="off"><datalist id="'+id+'-l">'+groupsList().map(g=>'<option value="'+esc(g)+'">').join('')+'</datalist>';
+  return '<select id="'+id+'">'+ME.g.filter(Boolean).map(g=>'<option value="'+esc(g)+'"'+(g===val?' selected':'')+'>'+esc(g)+'</option>').join('')+'</select>';
 }
 function studentRows(){
   const list=byLabel();
   if(!list.length)return '<li class="empty">Todavía no hay alumnos. Agregá el primero arriba.</li>';
   return list.map(s=>{
-    if(ui.editing===s.c)return '<li><div class="stack" style="gap:8px"><label class="field">Etiqueta que ven las familias<input type="text" id="edit-label" value="'+esc(s.l)+'" maxlength="40"></label><label class="field">Nombre completo para el ingreso (dejalo vacío para no cambiarlo)<input type="text" id="edit-full" maxlength="60" autocomplete="off"></label><div class="acts" style="margin:0"><button class="btn primary sm" data-act="rename-save" data-key="'+esc(s.c)+'">Guardar</button><button class="btn ghost sm" data-act="rename-cancel">Cancelar</button></div></div></li>';
+    if(ui.editing===s.c)return '<li><div class="stack" style="gap:8px"><label class="field">Etiqueta que ven las familias<input type="text" id="edit-label" value="'+esc(s.l)+'" maxlength="40"></label><label class="field">Nombre completo para el ingreso (dejalo vacío para no cambiarlo)<input type="text" id="edit-full" maxlength="60" autocomplete="off"></label>'+(ME.adm?'<label class="field">Grupo'+groupField('edit-group',s.g)+'</label>':'')+'<div class="acts" style="margin:0"><button class="btn primary sm" data-act="rename-save" data-key="'+esc(s.c)+'">Guardar</button><button class="btn ghost sm" data-act="rename-cancel">Cancelar</button></div></div></li>';
     if(ui.confirm==='del:'+s.c)return '<li><div class="note bad">¿Eliminar a <b>'+esc(s.l)+'</b> con su asistencia y sus puntos?</div><div class="acts"><button class="btn danger sm" data-act="del-yes" data-key="'+esc(s.c)+'">Sí, eliminar</button><button class="btn ghost sm" data-act="confirm-no">No</button></div></li>';
-    return '<li><div class="kn" style="font-size:22px">'+esc(s.l)+'</div><div class="muted sm">'+(s.p||0)+' pts · '+s.a.length+' asistencias</div><div class="acts"><button class="btn sm primary" data-act="copy-link" data-key="'+esc(s.c)+'">Copiar link de etiqueta</button><details class="more" style="flex:1 1 100%"><summary>Más opciones</summary><div class="acts"><button class="btn sm ghost" data-act="rename" data-key="'+esc(s.c)+'">Editar</button><button class="btn sm ghost" data-act="del" data-key="'+esc(s.c)+'">Eliminar</button></div></details></div>'+(ui.showLink===s.c?'<div style="margin-top:8px"><input readonly data-select="1" value="'+esc(tagUrl(s))+'" aria-label="Link de la etiqueta"></div>':'')+'</li>';
+    return '<li><div class="kn" style="font-size:22px">'+esc(s.l)+gtag(s)+'</div><div class="muted sm">'+(s.p||0)+' pts · '+s.a.length+' asistencias</div><div class="acts"><button class="btn sm primary" data-act="copy-link" data-key="'+esc(s.c)+'">Copiar link de etiqueta</button><details class="more" style="flex:1 1 100%"><summary>Más opciones</summary><div class="acts"><button class="btn sm ghost" data-act="rename" data-key="'+esc(s.c)+'">Editar</button><button class="btn sm ghost" data-act="del" data-key="'+esc(s.c)+'">Eliminar</button></div></details></div>'+(ui.showLink===s.c?'<div style="margin-top:8px"><input readonly data-select="1" value="'+esc(tagUrl(s))+'" aria-label="Link de la etiqueta"></div>':'')+'</li>';
   }).join('');
 }
 function viewStu(){
-  let h='<section class="stack"><h2 class="h">Alumnos</h2>'+connectCard();
-  if(!ui.connected)return h+'</section>';
-  h+='<form class="card stack" id="add-form" style="gap:10px"><h3 style="margin:0">Agregar alumno</h3><div class="muted sm">Escribí el nombre completo como lo van a escribir las familias para entrar. No se guarda: solo queda la etiqueta abreviada y una huella.</div><div class="row"><input type="text" id="new-name" placeholder="Nombre y apellido" autocomplete="off" maxlength="60" value="'+esc(ui.newName)+'"><button class="btn primary" type="submit">Agregar</button></div><details class="more"><summary>Agregar varios a la vez</summary><textarea id="bulk" placeholder="Un nombre por línea"></textarea><div class="acts"><button class="btn sm" type="button" data-act="bulk-add">Agregar lista</button></div></details></form>';
+  let h='<section class="stack"><h2 class="h">Alumnos</h2>'+groupChips();
+  const noGroups=!ME.adm&&!ME.g.filter(Boolean).length;
+  if(noGroups)h+='<div class="note warn">Todavía no tenés grupos asignados. Pedile al administrador que te asigne uno.</div>';
+  else{
+    const defG=ui.newGroup||ui.grp||(ME.adm?'':ME.g[0]);
+    h+='<form class="card stack" id="add-form" style="gap:10px"><h3 style="margin:0">Agregar alumno</h3><div class="muted sm">Escribí el nombre completo como lo van a escribir las familias para entrar. No se guarda: solo queda la etiqueta abreviada y una huella.</div><input type="text" id="new-name" placeholder="Nombre y apellido" autocomplete="off" maxlength="60" value="'+esc(ui.newName)+'">'+groupField('new-group',defG)+'<div><button class="btn primary" type="submit">Agregar</button></div><details class="more"><summary>Agregar varios a la vez (del grupo de arriba)</summary><textarea id="bulk" placeholder="Un nombre por línea"></textarea><div class="acts"><button class="btn sm" type="button" data-act="bulk-add">Agregar lista</button></div></details></form>';
+  }
   h+='<div class="card flush"><ul class="list">'+studentRows()+'</ul></div>';
-  h+='<div class="card stack" style="gap:10px"><h3 style="margin:0">Nombre del club</h3><input type="text" id="club-name" maxlength="50" value="'+esc(D.club)+'" aria-label="Nombre del club"></div>';
-  h+='<div class="card stack" style="gap:8px"><h3 style="margin:0">Etiquetas con iPhone</h3><ol class="how"><li><b>Copiá el link</b> del alumno con el botón de arriba.</li><li>Abrí <b>NFC Tools</b> (gratis) y elegí <b>Escribir › Agregar un registro › URL</b>. Pegá el link y tocá <b>Escribir</b>.</li><li>Acercá la etiqueta a la parte de arriba del iPhone hasta que confirme.</li><li>Para registrar, acercá la etiqueta: aparece un aviso arriba, tocalo y se abre esta página con el resultado.</li></ol><div class="muted sm">Conviene agregar esta página a la pantalla de inicio: Compartir › Agregar a pantalla de inicio.</div></div>';
-  h+='<div class="card stack" style="gap:10px"><h3 style="margin:0">Datos</h3><div class="acts" style="margin:0"><button class="btn sm" data-act="show-json">'+(ui.showJson?'Ocultar datos':'Ver datos (copia)')+'</button></div>'+(ui.showJson?'<textarea readonly data-select="1" id="json-text" aria-label="Contenido de datos.json">'+esc(JSON.stringify(D,null,1))+'</textarea>':'')+'</div>';
-  h+='<div class="card stack" style="gap:10px"><h3 style="margin:0">Cuidado</h3>'+(ui.confirm==='pts'?'<div class="note bad">Esto pone en cero los puntos de todos. La asistencia no se toca.</div><div class="acts"><button class="btn danger sm" data-act="reset-yes">Sí, poner en cero</button><button class="btn ghost sm" data-act="confirm-no">No</button></div>':'<div><button class="btn sm" data-act="reset-pts">Poner los puntos en cero</button></div>')+'</div>';
+  if(ME.adm)h+='<div class="card stack" style="gap:10px"><h3 style="margin:0">Nombre del club</h3><input type="text" id="club-name" maxlength="50" value="'+esc(D.club)+'" aria-label="Nombre del club"></div>';
+  h+='<div class="card stack" style="gap:8px"><h3 style="margin:0">Etiquetas con iPhone</h3><ol class="how"><li><b>Copiá el link</b> del alumno con el botón de arriba.</li><li>Abrí <b>NFC Tools</b> (gratis) y elegí <b>Escribir › Agregar un registro › URL</b>. Pegá el link y tocá <b>Escribir</b>.</li><li>Acercá la etiqueta a la parte de arriba del iPhone hasta que confirme.</li><li>Para registrar, acercá la etiqueta: aparece un aviso arriba, tocalo y se abre esta página con el resultado.</li></ol></div>';
+  h+='<div class="card stack" style="gap:10px"><h3 style="margin:0">Mi cuenta</h3><div class="muted sm">Sesión de <b>'+esc(ME.n)+'</b>'+(ME.adm?' (administrador)':'')+'.</div><form class="stack" id="pw-form" style="gap:8px"><label class="field">Contraseña nueva<input type="password" id="pw-new" autocomplete="new-password"></label><div><button class="btn sm" type="submit">Cambiar contraseña</button></div></form><div><button class="btn sm ghost" data-act="logout">Cerrar sesión</button></div></div>';
+  if(ME.adm){
+    h+='<div class="card stack" style="gap:10px"><h3 style="margin:0">Datos</h3><div class="acts" style="margin:0"><button class="btn sm" data-act="show-json">'+(ui.showJson?'Ocultar datos':'Ver datos (copia)')+'</button></div>'+(ui.showJson?'<textarea readonly data-select="1" id="json-text" aria-label="Contenido de datos.json">'+esc(JSON.stringify(D,null,1))+'</textarea>':'')+'</div>';
+  }
+  h+='<div class="card stack" style="gap:10px"><h3 style="margin:0">Cuidado</h3>'+(ui.confirm==='pts'?'<div class="note bad">Esto pone en cero los puntos de los alumnos de la lista actual. La asistencia no se toca.</div><div class="acts"><button class="btn danger sm" data-act="reset-yes">Sí, poner en cero</button><button class="btn ghost sm" data-act="confirm-no">No</button></div>':'<div><button class="btn sm" data-act="reset-pts">Poner los puntos en cero</button></div>')+'</div>';
   return h+'</section>';
 }
-function errorCard(){
-  return '<section class="stack">'+(ui.loadErr==='token'?'':'<div class="card stack"><div>No pudimos cargar los datos. Revisá tu conexión.</div><div><button class="btn primary" data-act="retry">Reintentar</button></div></div>')+(TOKEN&&ui.loadErr!=='token'?'':connectCard())+'</section>';
+function viewTeam(){
+  let h='<section class="stack"><h2 class="h">Equipo</h2>';
+  h+='<div class="card flush"><ul class="list">'+COACHES.map(c=>{
+    if(ui.confirm==='coach:'+c.id)return '<li><div class="note bad">¿Eliminar a <b>'+esc(c.n)+'</b>? Ya no va a poder entrar.</div><div class="acts"><button class="btn danger sm" data-act="coach-del-yes" data-id="'+esc(c.id)+'">Sí, eliminar</button><button class="btn ghost sm" data-act="confirm-no">No</button></div></li>';
+    return '<li><div class="kn" style="font-size:22px">'+esc(c.n)+(c.adm?'<span class="gtag">Administrador</span>':'')+'</div><div class="muted sm">'+(c.adm?'Ve todos los grupos':(c.g&&c.g.length?'Grupos: '+esc(c.g.join(', ')):'Sin grupos'))+'</div>'+(c.id===ME.id?'':'<div class="acts"><button class="btn sm ghost" data-act="coach-del" data-id="'+esc(c.id)+'">Eliminar</button></div>')+'</li>';
+  }).join('')+'</ul></div>';
+  h+='<form class="card stack" id="coach-form" style="gap:10px"><h3 style="margin:0">Agregar entrenador</h3><label class="field">Nombre<input type="text" id="c-name" maxlength="30" autocomplete="off"></label><label class="field">Usuario<input type="text" id="c-user" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off"></label><label class="field">Contraseña<input type="text" id="c-pass" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off"></label><div class="pw-hint">Mínimo 8 caracteres. Se la pasás vos al entrenador; después puede cambiarla.</div><label class="field">Grupos o clases (separados por coma)<input type="text" id="c-groups" list="c-groups-l" placeholder="Ej: Sub 12, Sub 14" autocomplete="off"></label><datalist id="c-groups-l">'+groupsList().map(g=>'<option value="'+esc(g)+'">').join('')+'</datalist><label class="chk"><input type="checkbox" id="c-adm"> Administrador (ve todo y crea usuarios)</label>'+errNote()+'<div><button class="btn primary" type="submit"'+(ui.busy?' disabled':'')+'>Crear entrenador</button></div></form>';
+  h+='<div class="note">Cada entrenador solo ve y registra a los alumnos de sus grupos. Es un orden de trabajo, no una barrera de seguridad total: quien sepa su contraseña usa el mismo token de GitHub.</div>';
+  return h+'</section>';
 }
+const KEEP=['su-repo','su-tok','su-name','su-user','su-pass','lg-user','c-name','c-user','c-pass','c-groups','c-adm'];
 function render(){
   const tabs=[['reg','Registrar'],['att','Asistencia'],['rank','Ranking'],['stu','Alumnos']];
-  const views={reg:viewReg,att:viewAtt,rank:viewRank,stu:viewStu};
+  if(ME&&ME.adm)tabs.push(['team','Equipo']);
+  const views={reg:viewReg,att:viewAtt,rank:viewRank,stu:viewStu,team:viewTeam};
   let body;
+  const app=inApp();
   if(ui.loading)body='<div class="card muted">Cargando…</div>';
-  else if(!D)body=errorCard();
-  else if(!unlocked())body=gateCard();
-  else body=views[ui.tab]();
-  $('#app').innerHTML=headerHtml()+'<main class="in main">'+body+'</main>'+(D&&unlocked()?'<nav class="tabs" aria-label="Secciones"><div class="in">'+tabs.map(t=>'<button class="tab" data-tab="'+t[0]+'" aria-current="'+(t[0]===ui.tab?'page':'false')+'">'+t[1]+'</button>').join('')+'</div></nav>':'');
+  else if(app)body=(ui.notice?'<div class="note ok" style="margin-bottom:14px">'+esc(ui.notice)+'</div>':'')+(views[ui.tab]||viewReg)();
+  else if(ui.bootErr)body='<div class="card stack"><div>No pudimos cargar. Revisá tu conexión.</div><div><button class="btn primary" data-act="retry">Reintentar</button></div></div>';
+  else if(ME&&ui.loadErr)body='<div class="card stack"><div>No pudimos cargar los datos. Revisá tu conexión.</div><div><button class="btn primary" data-act="retry">Reintentar</button> <button class="btn ghost" data-act="logout">Salir</button></div></div>';
+  else body=COACHES.length?loginCard():setupCard();
+  const keep={};
+  if(!ui.resetForm)KEEP.forEach(id=>{const el=$('#'+id);if(el)keep[id]=el.type==='checkbox'?el.checked:el.value;});
+  ui.resetForm=false;
+  $('#app').innerHTML=headerHtml()+'<main class="in main">'+body+'</main>'+(app&&!ui.loading?'<nav class="tabs" aria-label="Secciones"><div class="in">'+tabs.map(t=>'<button class="tab" data-tab="'+t[0]+'" aria-current="'+(t[0]===ui.tab?'page':'false')+'">'+t[1]+'</button>').join('')+'</div></nav>':'');
+  for(const id in keep){const el=$('#'+id);if(el){if(el.type==='checkbox')el.checked=keep[id];else el.value=keep[id];}}
   if(D&&D.club)document.title=D.club+' · Entrenador';
 }
 
-/* ---------- Carga ---------- */
-async function load(){
-  ui.loading=true;ui.loadErr='';render();
+/* ---------- Arranque y sesión ---------- */
+async function enter(){
+  ui.loadErr='';
   try{
-    if(TOKEN&&REPO){
-      const g=await ghGet();
-      if(g.missing){D=normalizeData(null);SHA=null;}else{D=normalizeData(g.data);SHA=g.sha;}
-      ui.connected=true;
-    }else{
-      const r=await fetch('datos.json?t='+Date.now(),{cache:'no-store'});
-      if(!r.ok)throw new Error('http');
-      D=normalizeData(await r.json());ui.connected=false;
-    }
+    const g=await ghGetF('datos.json');
+    D=normalizeData(g.missing?null:g.data);SHA=g.missing?null:g.sha;
+    ui.connected=true;
   }catch(e){
-    D=null;ui.connected=false;
-    ui.loadErr=(e&&(e.status===401||e.status===403))?'token':'red';
+    if(e&&(e.status===401||e.status===403)){doLogout();ui.err='El token de GitHub venció o no tiene permiso. Avisale al administrador.';return false;}
+    D=null;ui.connected=false;ui.loadErr='red';return false;
   }
-  ui.loading=false;
-  applyPendingCoach();
-  render();
+  return true;
+}
+function doLogout(){
+  TOKEN='';ME=null;D=null;SHA=null;ui.connected=false;ui.undo=[];ui.result=null;ui.tab='reg';ui.grp='';ui.sel='';ui.confirm=null;ui.editing=null;
+  ls.del('club-tok');ls.del('club-me');
+}
+async function boot(){
+  ui.loading=true;ui.bootErr=false;render();
+  try{
+    const r=await fetch('entrenadores.json?t='+Date.now(),{cache:'no-store'});
+    if(r.status===404)COACHES=[];
+    else if(r.ok){const j=await r.json();COACHES=Array.isArray(j.coaches)?j.coaches:[];}
+    else throw new Error('http');
+  }catch(e){ui.bootErr=true;ui.loading=false;render();return;}
+  const me=ls.get('club-me');
+  if(me&&TOKEN&&REPO){
+    const rec=COACHES.find(c=>c.id===me);
+    if(rec){ME=norm(rec);await enter();}
+    else doLogout();
+  }
+  ui.loading=false;render();
   tryScan();
 }
+const norm=c=>Object.assign({},c,{g:Array.isArray(c.g)?c.g:[],adm:!!c.adm,n:c.n||'Entrenador'});
 function tryScan(){
   const code=(location.hash||'').replace(/^#/,'');
-  if(!D||!code||!unlocked())return;
-  if(ui.connected){clearHash();processScan(code);}
-  else toast('Conectá GitHub para registrar con la etiqueta.','warn');
+  if(!code||!inApp())return;
+  clearHash();processScan(code);
+}
+async function doLogin(user,pass){
+  if(!(window.crypto&&crypto.subtle)){ui.err='Abrí el sitio con https para poder entrar.';return false;}
+  const id=await userId(user),rec=COACHES.find(c=>c.id===id);
+  if(!rec){ui.err='Usuario o contraseña incorrectos.';return false;}
+  let p;
+  try{p=await unseal(pass,rec);}catch(e){ui.err='Usuario o contraseña incorrectos.';return false;}
+  TOKEN=p.t;REPO=p.r||REPO;ME=norm(rec);
+  ls.set('club-tok',TOKEN);ls.set('club-me',ME.id);ls.set('club-repo',REPO);
+  ui.err='';
+  return await enter();
 }
 
 /* ---------- Eventos ---------- */
 const A={
-  retry:()=>load(),
+  retry:()=>boot(),
+  logout:()=>{doLogout();ui.err='';render();},
+  grp:b=>{ui.grp=b.dataset.g||'';render();},
   mode:b=>{cfg.mode=b.dataset.mode;saveCfg();render();},
   amt:b=>{cfg.amount=+b.dataset.amt;saveCfg();render();},
   mark:b=>{const s=stu(b.dataset.key);if(s)mark(s,cfg.mode,false);},
@@ -455,16 +531,6 @@ const A={
   'save-now':()=>{if(!dirty){toast('Todo guardado.','ok');return;}flush();},
   'go-stu':()=>{ui.tab='stu';render();},
   all:()=>{ui.all=!ui.all;render();},
-  connect:async()=>{
-    const repo=($('#repo').value||'').trim().replace(/^https?:\/\/github\.com\//,'').replace(/\/+$/,''),tok=($('#tok').value||'').trim();
-    if(repo.indexOf('/')<1){toast('Escribí el repositorio como usuario/nombre.','warn');return;}
-    if(!tok){toast('Pegá el token.','warn');return;}
-    REPO=repo;TOKEN=tok;ls.set('club-repo',REPO);ls.set('club-tok',TOKEN);
-    await load();
-    if(ui.connected)toast('Conectado. Ya podés cargar y publicar.','ok');
-  },
-  'coach-out':()=>{ls.del('club-coach');render();},
-  disconnect:()=>{TOKEN='';ls.del('club-tok');ui.connected=false;ui.loadErr='';load();},
   'copy-link':async b=>{
     const s=stu(b.dataset.key);if(!s)return;
     const ok=await copyText(tagUrl(s));
@@ -481,55 +547,124 @@ const A={
       s.h=hs;
     }
     if(lab)s.l=lab;
+    const ge=$('#edit-group');if(ge&&ME.adm)s.g=(ge.value||'').trim();
     touch();ui.editing=null;render();
   },
   'rename-cancel':()=>{ui.editing=null;render();},
   del:b=>{ui.confirm='del:'+b.dataset.key;render();},
-  'del-yes':b=>{const k=b.dataset.key;D.students=D.students.filter(s=>s.c!==k);if(ui.sel===k)ui.sel='';ui.confirm=null;ui.undo=[];ui.result=null;touch();render();},
+  'del-yes':b=>{const k=b.dataset.key;if(!stu(k))return;D.students=D.students.filter(s=>s.c!==k);if(ui.sel===k)ui.sel='';ui.confirm=null;ui.undo=[];ui.result=null;touch();render();},
   'confirm-no':()=>{ui.confirm=null;render();},
   'reset-pts':()=>{ui.confirm='pts';render();},
-  'reset-yes':()=>{D.students.forEach(s=>{s.p=0;s.r=[];});ui.confirm=null;ui.undo=[];ui.result=null;touch();render();toast('Puntos en cero.','ok');},
+  'reset-yes':()=>{vis().forEach(s=>{s.p=0;s.r=[];});ui.confirm=null;ui.undo=[];ui.result=null;touch();render();toast('Puntos en cero.','ok');},
   'show-json':()=>{ui.showJson=!ui.showJson;render();},
   'bulk-add':async()=>{
+    const g=($('#new-group')||{}).value||'';
     const names=($('#bulk').value||'').split('\n').map(x=>x.trim()).filter(Boolean);
     let n=0;
-    for(const x of names){if(await addStudent(x)==='ok')n++;}
+    for(const x of names){if(await addStudent(x,g)==='ok')n++;}
     if(n)touch();render();toast(n?n+' alumnos agregados.':'No había nombres nuevos.',n?'ok':'warn');
+  },
+  'coach-del':b=>{ui.confirm='coach:'+b.dataset.id;render();},
+  'coach-del-yes':async b=>{
+    try{
+      await loadCoaches();
+      COACHES=COACHES.filter(c=>c.id!==b.dataset.id||c.id===ME.id);
+      await saveCoaches();ui.confirm=null;render();toast('Entrenador eliminado.','ok');
+    }catch(e){toast('No se pudo guardar. Probá de nuevo.','bad');}
   }
 };
-document.addEventListener('click',e=>{
+document.addEventListener('click',async e=>{
   const t=e.target.closest('[data-tab]');
-  if(t){ui.tab=t.dataset.tab;ui.confirm=null;ui.editing=null;render();window.scrollTo(0,0);return;}
+  if(t){
+    ui.tab=t.dataset.tab;ui.confirm=null;ui.editing=null;ui.err='';render();window.scrollTo(0,0);
+    if(ui.tab==='team'){try{await loadCoaches();if(ui.tab==='team')render();}catch(err){}}
+    return;
+  }
   const b=e.target.closest('[data-act]');
   if(b&&A[b.dataset.act])A[b.dataset.act](b);
 });
+const val=id=>(($('#'+id)||{}).value||'');
 document.addEventListener('submit',async e=>{
-  if(e.target.id==='gate'){
-    e.preventDefault();
-    if(!(window.crypto&&crypto.subtle)){ui.gateErr='Abrí el sitio con https para poder entrar.';render();return;}
-    const u=($('#gate-user').value||'').trim();
-    if(!normTokens(u).length){ui.gateErr='Escribí tu usuario.';render();return;}
-    if(D.coach&&D.coach.h){
-      if(await userHash(D.coach.s,u)!==D.coach.h){ui.gateErr='Ese usuario no es correcto.';render();return;}
-      ls.set('club-coach',D.coach.h);
-    }else{
-      const salt=rnd(16),h=await userHash(salt,u);
-      ls.set('club-coach-new',JSON.stringify({s:salt,h:h}));ls.set('club-coach',h);
-      applyPendingCoach();
-    }
-    ui.gateErr='';render();tryScan();return;
+  const id=e.target.id;
+  if(id==='login'){
+    e.preventDefault();if(ui.busy)return;
+    const lu=val('lg-user').trim(),lp=val('lg-pass');
+    ui.busy=true;ui.err='';render();
+    const ok=await doLogin(lu,lp);
+    ui.busy=false;render();
+    if(ok)tryScan();
+    return;
   }
-  if(e.target.id!=='add-form')return;
+  if(id==='setup'){
+    e.preventDefault();if(ui.busy)return;
+    const repo=val('su-repo').trim().replace(/^https?:\/\/github\.com\//,'').replace(/\/+$/,''),tok=val('su-tok').trim(),name=val('su-name').trim(),user=val('su-user').trim(),pass=val('su-pass');
+    REPO=repo||REPO;
+    if(repo.indexOf('/')<1){ui.err='Escribí el repositorio como usuario/nombre.';render();return;}
+    if(!tok){ui.err='Pegá el token de GitHub.';render();return;}
+    if(!name||!normTokens(user).length){ui.err='Completá tu nombre y un usuario.';render();return;}
+    if(pass.length<8){ui.err='La contraseña debe tener al menos 8 caracteres.';render();return;}
+    ui.busy=true;ui.err='';render();
+    try{
+      TOKEN=tok;
+      const ex=await ghGetF('entrenadores.json');
+      if(!ex.missing){ui.err='Ya hay usuarios creados. Volvé al inicio e ingresá con el tuyo (puede tardar unos minutos en verse).';TOKEN='';ui.busy=false;render();return;}
+      const rec=Object.assign({id:await userId(user),n:name,g:[],adm:true},await seal(pass,{t:tok,r:repo}));
+      COACHES=[rec];CSHA=null;await saveCoaches();
+      ls.set('club-tok',tok);ls.set('club-me',rec.id);ls.set('club-repo',repo);ME=norm(rec);
+      await enter();
+    }catch(err){
+      TOKEN='';ME=null;COACHES=[];
+      ui.err=(err&&(err.status===401||err.status===403))?'GitHub no aceptó el token. Revisá que tenga permiso Contents: Read and write sobre este repositorio.':(err&&err.status===404)?'No encontramos ese repositorio con ese token.':'No se pudo completar. Revisá la conexión y los datos.';
+    }
+    ui.busy=false;render();
+    if(inApp())toast('Administrador creado. Ya podés cargar alumnos.','ok');
+    return;
+  }
+  if(id==='coach-form'){
+    e.preventDefault();if(ui.busy||!ME.adm)return;
+    const name=val('c-name').trim(),user=val('c-user').trim(),pass=val('c-pass'),gs=parseGroups(val('c-groups')),adm=!!($('#c-adm')||{}).checked;
+    if(!name||!normTokens(user).length){ui.err='Completá el nombre y el usuario.';render();return;}
+    if(pass.length<8){ui.err='La contraseña debe tener al menos 8 caracteres.';render();return;}
+    if(!adm&&!gs.length){ui.err='Asignale al menos un grupo, o marcalo como administrador.';render();return;}
+    ui.busy=true;ui.err='';render();
+    try{
+      await loadCoaches();
+      const cid=await userId(user);
+      if(COACHES.some(c=>c.id===cid)){ui.err='Ya existe un entrenador con ese usuario.';ui.busy=false;render();return;}
+      COACHES.push(Object.assign({id:cid,n:name,g:gs,adm:adm},await seal(pass,{t:TOKEN,r:REPO})));
+      await saveCoaches();
+      ui.resetForm=true;
+      ui.notice='Entrenador “'+name+'” creado. Puede tardar unos minutos en poder entrar desde otro teléfono.';
+    }catch(err){ui.err='No se pudo guardar. Probá de nuevo.';}
+    ui.busy=false;render();
+    return;
+  }
+  if(id==='pw-form'){
+    e.preventDefault();
+    const pw=val('pw-new');
+    if(pw.length<8){toast('La contraseña debe tener al menos 8 caracteres.','warn');return;}
+    try{
+      await loadCoaches();
+      const i=COACHES.findIndex(c=>c.id===ME.id);
+      if(i<0){toast('No encontramos tu usuario.','bad');return;}
+      COACHES[i]=Object.assign({},COACHES[i],await seal(pw,{t:TOKEN,r:REPO}));
+      await saveCoaches();$('#pw-new').value='';toast('Contraseña cambiada.','ok');
+    }catch(err){toast('No se pudo guardar. Probá de nuevo.','bad');}
+    return;
+  }
+  if(id!=='add-form')return;
   e.preventDefault();
-  if(needConn())return;
   const name=ui.newName.trim();if(!name)return;
-  const r=await addStudent(name);
+  const g=val('new-group');
+  const r=await addStudent(name,g);
   if(r==='dup'){toast('Ya hay un alumno con ese nombre.','warn');return;}
-  ui.newName='';touch();render();toast(name.split(' ')[0]+' agregado/a.','ok');
+  if(r==='group'){toast('Elegí uno de tus grupos.','warn');return;}
+  ui.newName='';ui.newGroup=g;touch();render();toast(name.split(' ')[0]+' agregado/a.','ok');
 });
 document.addEventListener('input',e=>{
   const t=e.target;
   if(t.id==='new-name')ui.newName=t.value;
+  else if(t.id==='new-group')ui.newGroup=t.value;
   else if(t.id==='q'){ui.q=t.value;const l=$('#roster');if(l)l.innerHTML=rosterRows();}
   else if(t.id==='amt-custom'){
     cfg.amount=parseInt(t.value,10)||0;saveCfg();
@@ -537,7 +672,7 @@ document.addEventListener('input',e=>{
     document.querySelectorAll('#roster .btn.gold').forEach(c=>{c.textContent=sgn(cfg.amount);});
   }
   else if(t.id==='reason'){cfg.reason=t.value;saveCfg();}
-  else if(t.id==='club-name'){if(ui.connected){D.club=t.value;touch(3000);const c=$('#clubtxt');if(c)c.textContent=D.club;}}
+  else if(t.id==='club-name'){if(inApp()&&ME.adm){D.club=t.value;touch(3000);const c=$('#clubtxt');if(c)c.textContent=D.club;}}
 });
 document.addEventListener('change',e=>{
   const t=e.target;
@@ -545,7 +680,7 @@ document.addEventListener('change',e=>{
   else if(t.id==='day'){ui.day=t.value||today();render();}
 });
 document.addEventListener('focusin',e=>{if(e.target.dataset&&e.target.dataset.select)e.target.select();});
-load();
+boot();
 })();
 </script>
 </body>

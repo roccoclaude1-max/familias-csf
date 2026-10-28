@@ -159,8 +159,8 @@ function loginCard(){
   return '<form class="card stack" id="login" style="gap:12px"><div><h3 style="margin:0 0 4px">Entrá con el nombre de tu hijo o hija</h3><div class="muted sm">Escribí nombre y apellido, como figura en el club. Después te recordamos en este teléfono.</div></div><label class="field">Nombre y apellido<input type="text" id="nm" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="go"></label>'+(ui.err?'<div class="note bad" role="alert">'+esc(ui.err)+'</div>':'')+'<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" type="submit"'+(ui.busy?' disabled':'')+'>Entrar</button>'+(ui.adding?'<button class="btn ghost" type="button" data-act="cancel-add">Cancelar</button>':'')+'</div></form>';
 }
 function viewAtt(mine){
-  const ds=(D.classes||[]).slice().sort();
   const sel=find(ui.kid)||mine[0];
+  const ds=((D.cg&&D.cg[sel.g||''])||D.classes||[]).slice().sort();
   let h='<section class="stack"><h2 class="h">Asistencia</h2>';
   if(mine.length>1)h+='<label class="field">Alumno<select id="kid">'+mine.map(s=>'<option value="'+esc(s.h[0])+'"'+(s===sel?' selected':'')+'>'+esc(s.l)+'</option>').join('')+'</select></label>';
   const set=new Set(sel.a||[]),n=ds.length,a=ds.filter(d=>set.has(d)).length,pct=n?Math.round(a/n*100):0;
