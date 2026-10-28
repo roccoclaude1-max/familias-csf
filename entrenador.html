@@ -263,7 +263,7 @@ function ranking(){
   return rows;
 }
 const byLabel=()=>vis().sort((a,b)=>a.l.localeCompare(b.l,'es'));
-const tagUrl=s=>location.href.split('#')[0]+'#'+s.c;
+const tagUrl=s=>location.origin+location.pathname.replace(/[^\/]*$/,'')+'entrenador.html#'+s.c;
 const gtag=s=>s.g?'<span class="gtag">'+esc(s.g)+'</span>':'';
 
 /* ---------- Guardado ---------- */

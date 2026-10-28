@@ -105,6 +105,8 @@ select:focus-visible,input:focus-visible,button:focus-visible{outline:3px solid 
 <body>
 <div id="app"></div>
 <script>
+/* Las etiquetas NFC traen el código del alumno en #código: eso es del panel del entrenador. */
+if(/^#a[a-z0-9]{7}$/.test(location.hash)){location.replace('entrenador.html'+location.hash);}
 (function(){
 'use strict';
 /* Los datos viven en datos.json. Los nombres completos no aparecen ahí: solo la etiqueta abreviada
