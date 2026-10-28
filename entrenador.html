@@ -234,7 +234,7 @@ async function saveCoaches(){CSHA=await ghPutF('entrenadores.json',JSON.stringif
 let cfg={mode:'att',amount:1,reason:''};
 try{cfg=Object.assign(cfg,JSON.parse(ls.get('club-cfg')||'{}'));}catch(e){}
 const saveCfg=()=>ls.set('club-cfg',JSON.stringify(cfg));
-const ui={tab:'reg',day:today(),sel:'',q:'',grp:'',confirm:null,editing:null,loading:true,bootErr:false,err:'',connected:false,save:'saved',showLink:null,newName:'',newGroup:'',result:null,all:false,showJson:false,undo:[],busy:false,notice:''};
+const ui={tab:'reg',day:today(),sel:'',q:'',grp:'',confirm:null,editing:null,loading:true,bootErr:false,err:'',connected:false,save:'saved',showLink:null,newName:'',newGroup:'',result:null,all:false,showJson:false,undo:[],busy:false,notice:'',editCoach:null};
 function emptyData(){return{v:1,club:'Mi club',salt:'',updated:'',classes:[],students:[]};}
 function normalizeData(d){
   if(!d||!Array.isArray(d.students))d=emptyData();
@@ -441,13 +441,14 @@ function viewTeam(){
   let h='<section class="stack"><h2 class="h">Equipo</h2>';
   h+='<div class="card flush"><ul class="list">'+COACHES.map(c=>{
     if(ui.confirm==='coach:'+c.id)return '<li><div class="note bad">¿Eliminar a <b>'+esc(c.n)+'</b>? Ya no va a poder entrar.</div><div class="acts"><button class="btn danger sm" data-act="coach-del-yes" data-id="'+esc(c.id)+'">Sí, eliminar</button><button class="btn ghost sm" data-act="confirm-no">No</button></div></li>';
-    return '<li><div class="kn" style="font-size:22px">'+esc(c.n)+(c.adm?'<span class="gtag">Administrador</span>':'')+'</div><div class="muted sm">'+(c.adm?'Ve todos los grupos':(c.g&&c.g.length?'Grupos: '+esc(c.g.join(', ')):'Sin grupos'))+'</div>'+(c.id===ME.id?'':'<div class="acts"><button class="btn sm ghost" data-act="coach-del" data-id="'+esc(c.id)+'">Eliminar</button></div>')+'</li>';
+    if(ui.editCoach===c.id)return '<li><form class="stack" id="coach-edit" data-id="'+esc(c.id)+'" style="gap:10px"><label class="field">Nombre<input type="text" id="e-name" maxlength="30" autocomplete="off" value="'+esc(c.n)+'"></label><label class="field">Usuario nuevo (vacío para no cambiarlo)<input type="text" id="e-user" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off"></label><label class="field">Contraseña nueva (vacía para no cambiarla)<input type="text" id="e-pass" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off"></label><label class="field">Grupos o clases (separados por coma)<input type="text" id="e-groups" list="c-groups-l" autocomplete="off" value="'+esc((c.g||[]).join(', '))+'"></label><datalist id="c-groups-l">'+groupsList().map(g=>'<option value="'+esc(g)+'">').join('')+'</datalist><label class="chk"><input type="checkbox" id="e-adm"'+(c.adm?' checked':'')+'> Administrador</label>'+errNote()+'<div class="acts" style="margin:0"><button class="btn primary sm" type="submit"'+(ui.busy?' disabled':'')+'>Guardar cambios</button><button class="btn ghost sm" type="button" data-act="coach-edit-cancel">Cancelar</button></div></form></li>';
+    return '<li><div class="kn" style="font-size:22px">'+esc(c.n)+(c.adm?'<span class="gtag">Administrador</span>':'')+'</div><div class="muted sm">'+(c.adm?'Ve todos los grupos':(c.g&&c.g.length?'Grupos: '+esc(c.g.join(', ')):'Sin grupos'))+'</div>'+'<div class="acts"><button class="btn sm" data-act="coach-edit" data-id="'+esc(c.id)+'">Editar</button>'+(c.id===ME.id?'':'<button class="btn sm ghost" data-act="coach-del" data-id="'+esc(c.id)+'">Eliminar</button>')+'</div>'+'</li>';
   }).join('')+'</ul></div>';
   h+='<form class="card stack" id="coach-form" style="gap:10px"><h3 style="margin:0">Agregar entrenador</h3><label class="field">Nombre<input type="text" id="c-name" maxlength="30" autocomplete="off"></label><label class="field">Usuario<input type="text" id="c-user" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off"></label><label class="field">Contraseña<input type="text" id="c-pass" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off"></label><div class="pw-hint">Mínimo 8 caracteres. Se la pasás vos al entrenador; después puede cambiarla.</div><label class="field">Grupos o clases (separados por coma)<input type="text" id="c-groups" list="c-groups-l" placeholder="Ej: Sub 12, Sub 14" autocomplete="off"></label><datalist id="c-groups-l">'+groupsList().map(g=>'<option value="'+esc(g)+'">').join('')+'</datalist><label class="chk"><input type="checkbox" id="c-adm"> Administrador (ve todo y crea usuarios)</label>'+errNote()+'<div><button class="btn primary" type="submit"'+(ui.busy?' disabled':'')+'>Crear entrenador</button></div></form>';
   h+='<div class="note">Cada entrenador solo ve y registra a los alumnos de sus grupos. Es un orden de trabajo, no una barrera de seguridad total: quien sepa su contraseña usa el mismo token de GitHub.</div>';
   return h+'</section>';
 }
-const KEEP=['su-repo','su-tok','su-name','su-user','su-pass','lg-user','c-name','c-user','c-pass','c-groups','c-adm'];
+const KEEP=['su-repo','su-tok','su-name','su-user','su-pass','lg-user','c-name','c-user','c-pass','c-groups','c-adm','e-name','e-user','e-pass','e-groups','e-adm'];
 function render(){
   const tabs=[['reg','Registrar'],['att','Asistencia'],['rank','Ranking'],['stu','Alumnos']];
   if(ME&&ME.adm)tabs.push(['team','Equipo']);
@@ -565,6 +566,8 @@ const A={
     for(const x of names){if(await addStudent(x,g)==='ok')n++;}
     if(n)touch();render();toast(n?n+' alumnos agregados.':'No había nombres nuevos.',n?'ok':'warn');
   },
+  'coach-edit':b=>{ui.editCoach=b.dataset.id;ui.err='';ui.confirm=null;render();},
+  'coach-edit-cancel':()=>{ui.editCoach=null;ui.err='';render();},
   'coach-del':b=>{ui.confirm='coach:'+b.dataset.id;render();},
   'coach-del-yes':async b=>{
     try{
@@ -636,6 +639,31 @@ document.addEventListener('submit',async e=>{
       await saveCoaches();
       ui.resetForm=true;
       ui.notice='Entrenador “'+name+'” creado. Puede tardar unos minutos en poder entrar desde otro teléfono.';
+    }catch(err){ui.err='No se pudo guardar. Probá de nuevo.';}
+    ui.busy=false;render();
+    return;
+  }
+  if(id==='coach-edit'){
+    e.preventDefault();if(ui.busy||!ME.adm)return;
+    const oid=e.target.dataset.id,name=val('e-name').trim(),user=val('e-user').trim(),pass=val('e-pass'),gs=parseGroups(val('e-groups')),adm=!!($('#e-adm')||{}).checked;
+    if(!name){ui.err='El nombre no puede quedar vacío.';render();return;}
+    if(user&&!normTokens(user).length){ui.err='El usuario no es válido.';render();return;}
+    if(pass&&pass.length<8){ui.err='La contraseña debe tener al menos 8 caracteres.';render();return;}
+    if(!adm&&!gs.length){ui.err='Asignale al menos un grupo, o marcalo como administrador.';render();return;}
+    ui.busy=true;ui.err='';render();
+    try{
+      await loadCoaches();
+      const i=COACHES.findIndex(c=>c.id===oid);
+      if(i<0){ui.err='No encontramos a ese entrenador.';ui.busy=false;render();return;}
+      if(!adm&&COACHES[i].adm&&!COACHES.some((c,k)=>k!==i&&c.adm)){ui.err='Tiene que quedar al menos un administrador.';ui.busy=false;render();return;}
+      let nid=oid;
+      if(user){nid=await userId(user);if(nid!==oid&&COACHES.some(c=>c.id===nid)){ui.err='Ya existe un entrenador con ese usuario.';ui.busy=false;render();return;}}
+      let rec=Object.assign({},COACHES[i],{id:nid,n:name,g:gs,adm:adm});
+      if(pass)rec=Object.assign(rec,await seal(pass,{t:TOKEN,r:REPO}));
+      COACHES[i]=rec;
+      await saveCoaches();
+      if(oid===ME.id){ME=norm(rec);ls.set('club-me',ME.id);if(!ME.adm){ui.tab='reg';}}
+      ui.editCoach=null;ui.resetForm=true;ui.notice='Cambios guardados para “'+name+'”. Pueden tardar unos minutos en verse desde otro teléfono.';
     }catch(err){ui.err='No se pudo guardar. Probá de nuevo.';}
     ui.busy=false;render();
     return;
