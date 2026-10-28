@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#1b4585">
+<meta name="robots" content="noindex, nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Entrenador">
+<title>Club · Entrenador</title>
+<link rel="apple-touch-icon" href="icono.png">
+<link rel="icon" href="icono.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Panel del entrenador. Misma paleta del escudo que el sitio de las familias. */
+:root{
+  --bg:#f3f7f3; --surface:#ffffff; --surface2:#e7efe8; --fg:#0e2347; --muted:#53627d; --line:#d3ddd5;
+  --accent:#1b4585; --accent-fg:#ffffff; --band:#1b4585; --band-fg:#ffffff;
+  --green:#237a34; --green-bg:#ddf0e1; --gold:#e1b02b; --gold-fg:#2e2200;
+  --bad:#b3261e; --bad-bg:#fbe3e1; --warn:#7d5300; --warn-bg:#fbefcf;
+  --display:"Barlow Condensed","Arial Narrow","Roboto Condensed",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0a1731; --surface:#12264b; --surface2:#1a3260; --fg:#e9f0fc; --muted:#9fb2d2; --line:#24407a;
+    --accent:#7ba8f0; --accent-fg:#071630; --band:#0f2a5a; --band-fg:#ffffff;
+    --green:#6fd283; --green-bg:#12392a; --gold:#f0c641; --gold-fg:#2e2200;
+    --bad:#ff958d; --bad-bg:#3d1a1c; --warn:#f2cb63; --warn-bg:#392c0c;
+    color-scheme:dark;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:400 16px/1.45 var(--body);-webkit-text-size-adjust:100%;min-height:100vh}
+[hidden]{display:none!important}
+.in{max-width:640px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.band{background:var(--band);color:var(--band-fg);border-bottom:4px solid var(--gold);padding-top:env(safe-area-inset-top,0px)}
+.band .in{display:flex;align-items:center;gap:12px;padding-top:12px;padding-bottom:12px}
+.crest{width:36px;height:43px;flex:none}
+.ttl{min-width:0;flex:1}
+.club{font:700 25px/1.05 var(--display);letter-spacing:.02em;text-transform:uppercase;overflow-wrap:anywhere}
+.who{font-size:12px;letter-spacing:.1em;text-transform:uppercase;opacity:.82}
+.chip-save{flex:none;border:1px solid rgba(255,255,255,.4);background:transparent;color:var(--band-fg);font:600 12px var(--body);border-radius:99px;padding:6px 12px;min-height:32px;cursor:pointer}
+.chip-save[data-st=pending]{background:var(--gold);border-color:var(--gold);color:var(--gold-fg)}
+.chip-save[data-st=error]{background:var(--bad);border-color:var(--bad);color:#fff}
+.main{padding-top:16px;padding-bottom:calc(110px + env(safe-area-inset-bottom,0px))}
+.stack{display:flex;flex-direction:column;gap:14px}
+h2.h{font:700 28px/1.1 var(--display);margin:2px 0 0;text-transform:uppercase;letter-spacing:.02em}
+h3{font:700 20px/1.1 var(--display);margin:0 0 6px;text-transform:uppercase;letter-spacing:.02em}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px}
+.card.flush{padding:6px 14px}
+.muted{color:var(--muted)} .sm{font-size:13px}
+.field{display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted)}
+select,input,textarea{font:inherit;font-size:16px;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-height:46px;width:100%}
+textarea{min-height:110px;resize:vertical}
+select:focus-visible,input:focus-visible,textarea:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row>input{flex:1 1 160px;min-width:0;width:auto}
+.btn{font:600 15px var(--body);min-height:46px;padding:0 16px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.btn:active{filter:brightness(.95)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn.ok{background:var(--green);border-color:var(--green);color:#fff}
+.btn.gold{background:var(--gold);border-color:var(--gold);color:var(--gold-fg);font-weight:700}
+.btn.ghost{background:transparent}
+.btn.danger{background:var(--bad);border-color:var(--bad);color:#fff}
+.btn.sm{min-height:40px;padding:0 12px;font-size:14px}
+.btn[disabled]{opacity:.55}
+@media (prefers-color-scheme:dark){.btn.ok{color:#06210f}}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:var(--surface2);padding:4px;border-radius:12px}
+.seg button{border:0;background:transparent;min-height:44px;border-radius:9px;font:700 18px var(--display);letter-spacing:.04em;text-transform:uppercase;color:var(--muted);cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--surface);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.22)}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{min-width:54px;min-height:46px;border-radius:99px;border:1px solid var(--line);background:var(--surface);color:var(--fg);font:700 18px var(--display);cursor:pointer;padding:0 14px}
+.chip[aria-pressed=true]{background:var(--gold);border-color:var(--gold);color:var(--gold-fg)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:380px){.grid2{grid-template-columns:1fr}}
+.note{border-radius:12px;padding:12px 14px;background:var(--surface2);font-size:14px}
+.note.warn{background:var(--warn-bg);color:var(--warn)}
+.note.bad{background:var(--bad-bg);color:var(--bad)}
+.note.ok{background:var(--green-bg);color:var(--green)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.tile{background:var(--surface2);border-radius:12px;padding:12px 6px 10px;text-align:center;min-width:0}
+.tile b{display:block;font:700 38px/1 var(--display);font-variant-numeric:tabular-nums}
+.tile span{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.kn{font:700 30px/1.05 var(--display);text-transform:uppercase;letter-spacing:.02em;overflow-wrap:anywhere}
+.meter{height:10px;background:var(--surface2);border-radius:99px;overflow:hidden}
+.meter i{display:block;height:100%;background:var(--green);border-radius:99px}
+.list{list-style:none;margin:0;padding:0}
+.list>li{padding:11px 0;border-top:1px solid var(--line)}
+.list>li:first-child{border-top:0}
+.list .empty{color:var(--muted)}
+.cls{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.tag{font-size:13px;font-weight:600;padding:3px 12px;border-radius:99px}
+.tag.ok{background:var(--green-bg);color:var(--green)}
+.tag.no{background:var(--surface2);color:var(--muted)}
+.rk{display:grid;grid-template-columns:40px 1fr auto;gap:10px;align-items:center}
+.pos{font:700 24px/1 var(--display);text-align:center;color:var(--muted);padding:6px 0}
+.pos.top{background:var(--gold);color:var(--gold-fg);border-radius:9px}
+.rk-name{font-weight:600;overflow-wrap:anywhere}
+.bar{height:8px;background:var(--surface2);border-radius:99px;margin:6px 0 3px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--green);border-radius:99px}
+.rk-pts{font:700 30px/1 var(--display);font-variant-numeric:tabular-nums;text-align:right}
+.rk-pts small{font:500 12px var(--body);color:var(--muted);margin-left:3px}
+.reg{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.reg .rn{min-width:0}
+.reg .rn b{font-weight:600;overflow-wrap:anywhere}
+.reg .btn{min-width:104px;flex:none}
+.res{display:flex;gap:12px;align-items:center;justify-content:space-between}
+.res.ok{background:var(--green-bg);border-color:transparent}
+.res.warn{background:var(--warn-bg);border-color:transparent}
+.res-name{font:700 26px/1.05 var(--display);text-transform:uppercase}
+.res.ok .res-name{color:var(--green)} .res.warn .res-name{color:var(--warn)}
+.sum{font-size:14px;color:var(--muted)} .sum b{font:700 22px var(--display);color:var(--fg)}
+.acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+details.more summary{cursor:pointer;color:var(--muted);font-size:14px;padding:8px 0;list-style:none}
+details.more summary::-webkit-details-marker{display:none}
+details.more summary::after{content:" \25BE"}
+ol.how{margin:6px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted)}
+ol.how b{color:var(--fg);font-weight:600}
+.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);z-index:20}
+.tabs .in{display:grid;grid-auto-flow:column;grid-auto-columns:1fr}
+.tab{border:0;background:none;color:var(--muted);font:700 18px var(--display);letter-spacing:.05em;text-transform:uppercase;padding:14px 2px 12px;min-height:52px;cursor:pointer;box-shadow:inset 0 4px 0 transparent}
+.tab[aria-current=page]{color:var(--accent);box-shadow:inset 0 4px 0 var(--gold)}
+.toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 10px);transform:translate(-50%,-160%);max-width:min(92vw,520px);background:var(--fg);color:var(--bg);padding:12px 16px;border-radius:12px;font-size:14px;z-index:40;transition:transform .25s}
+.toast.show{transform:translate(-50%,0)}
+.toast.ok{background:var(--green);color:#fff}
+.toast.warn{background:var(--gold);color:var(--gold-fg)}
+.toast.bad{background:var(--bad);color:#fff}
+@media (prefers-reduced-motion:reduce){.toast{transition:none}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script>
+(function(){
+'use strict';
+/* El panel lee y escribe datos.json en el repositorio de GitHub con un token que queda solo en este teléfono.
+   Los nombres completos no se guardan: solo la etiqueta abreviada y una huella para el ingreso de las familias. */
+const $=(s,r)=>(r||document).querySelector(s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ls={get(k){try{return localStorage.getItem(k);}catch(e){return null;}},set(k,v){try{localStorage.setItem(k,v);}catch(e){}},del(k){try{localStorage.removeItem(k);}catch(e){}}};
+const today=()=>new Date().toLocaleDateString('sv-SE');
+const hm=ts=>new Date(ts).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+const dShort=d=>new Date(d+'T12:00:00').toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short'}).replace(/\./g,'');
+const sgn=n=>(n>0?'+':'')+n;
+const rnd=n=>{let s='';while(s.length<n)s+=Math.random().toString(36).slice(2);return s.slice(0,n);};
+
+/* ---------- Nombres: etiqueta y huella ---------- */
+const COMB=new RegExp('['+String.fromCharCode(768)+'-'+String.fromCharCode(879)+']','g');
+const normTokens=s=>String(s).normalize('NFD').replace(COMB,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim().split(' ').filter(Boolean).sort();
+async function sha(t){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t));return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join('');}
+async function nameHashes(name){
+  const raw=name.trim().split(/\s+/);
+  const out=[await sha(D.salt+'|'+normTokens(name).join(' '))];
+  if(raw.length>=3){const h=await sha(D.salt+'|'+normTokens(raw[0]+' '+raw[raw.length-1]).join(' '));if(out.indexOf(h)<0)out.push(h);}
+  return out;
+}
+const cap=w=>w.charAt(0).toUpperCase()+w.slice(1);
+function makeLabel(name,skipId){
+  const p=name.trim().split(/\s+/),first=cap(p[0]||''),last=p.length>1?cap(p[p.length-1]):'';
+  const used=new Set(D.students.filter(s=>s!==skipId).map(s=>s.l));
+  if(!last)return used.has(first)?first+' (2)':first;
+  for(let k=1;k<=last.length;k++){
+    const c=first+' '+last.slice(0,k)+(k<last.length?'.':'');
+    if(!used.has(c))return c;
+  }
+  return first+' '+last+' (2)';
+}
+const mkCode=()=>{let c;do{c='a'+rnd(7);}while(D.students.some(s=>s.c===c));return c;};
+
+/* ---------- Conexión con GitHub ---------- */
+function guessRepo(){
+  const saved=ls.get('club-repo');
+  if(saved&&saved.indexOf('/')>0)return saved;
+  const h=location.hostname;
+  if(/\.github\.io$/.test(h)){const repo=location.pathname.split('/')[1];if(repo)return h.split('.')[0]+'/'+repo;}
+  return '';
+}
+let REPO=guessRepo(),TOKEN=ls.get('club-tok')||'',SHA=null,D=null;
+const API='https://api.github.com/repos/';
+const hdr=()=>({'Accept':'application/vnd.github+json','Authorization':'Bearer '+TOKEN});
+const b64e=s=>btoa(unescape(encodeURIComponent(s)));
+const b64d=s=>decodeURIComponent(escape(atob(s.replace(/\s/g,''))));
+async function ghGet(){
+  const r=await fetch(API+REPO+'/contents/datos.json',{headers:hdr(),cache:'no-store'});
+  if(r.status===404)return{missing:true};
+  if(!r.ok){const e=new Error('http');e.status=r.status;throw e;}
+  const j=await r.json();
+  return{sha:j.sha,data:JSON.parse(b64d(j.content))};
+}
+async function ghPut(text){
+  const body={message:'Actualizar datos ('+today()+')',content:b64e(text)};
+  if(SHA)body.sha=SHA;
+  const r=await fetch(API+REPO+'/contents/datos.json',{method:'PUT',headers:Object.assign({'Content-Type':'application/json'},hdr()),body:JSON.stringify(body)});
+  if(!r.ok){const e=new Error('http');e.status=r.status;throw e;}
+  const j=await r.json();
+  SHA=j.content&&j.content.sha;
+}
+
+/* ---------- Estado ---------- */
+let cfg={mode:'att',amount:1,reason:''};
+try{cfg=Object.assign(cfg,JSON.parse(ls.get('club-cfg')||'{}'));}catch(e){}
+const saveCfg=()=>ls.set('club-cfg',JSON.stringify(cfg));
+const ui={tab:'reg',day:today(),sel:'',q:'',confirm:null,editing:null,loading:true,loadErr:'',connected:false,save:'saved',showLink:null,newName:'',result:null,all:false,showJson:false,undo:[]};
+function emptyData(){return{v:1,club:'Mi club',salt:'',updated:'',classes:[],students:[]};}
+function normalizeData(d){
+  if(!d||!Array.isArray(d.students))d=emptyData();
+  d.club=d.club||'Mi club';d.salt=d.salt||'';d.classes=Array.isArray(d.classes)?d.classes:[];
+  d.students.forEach(s=>{s.a=Array.isArray(s.a)?s.a:[];s.p=s.p||0;s.r=Array.isArray(s.r)?s.r:[];s.h=Array.isArray(s.h)?s.h:[];s.l=s.l||'Alumno';});
+  const seen=new Set();
+  d.students.forEach(s=>{if(!s.c||seen.has(s.c))s.c='a'+rnd(7);seen.add(s.c);});
+  return d;
+}
+const stu=key=>D&&D.students.find(s=>s.c===key);
+const dates=()=>[...new Set(D.students.reduce((a,s)=>a.concat(s.a),[]))].sort();
+function ranking(){
+  const rows=D.students.map(s=>({s,p:s.p||0,a:s.a.length}));
+  rows.sort((x,y)=>y.p-x.p||y.a-x.a||x.s.l.localeCompare(y.s.l,'es'));
+  let pos=0,prev=null;
+  rows.forEach((r,i)=>{if(r.p!==prev){pos=i+1;prev=r.p;}r.pos=pos;});
+  return rows;
+}
+const byLabel=()=>D.students.slice().sort((a,b)=>a.l.localeCompare(b.l,'es'));
+const tagUrl=s=>location.href.split('#')[0]+'#'+s.c;
+
+/* ---------- Guardado ---------- */
+let dirty=false,timer=null,flushing=false;
+const SAVE_TXT={saved:'Guardado',pending:'Sin guardar',saving:'Guardando…',error:'Reintentar'};
+function setSave(st){ui.save=st;const el=$('#savechip');if(el){el.textContent=SAVE_TXT[st]||'';el.dataset.st=st;}}
+function touch(ms){dirty=true;setSave('pending');clearTimeout(timer);timer=setTimeout(flush,ms==null?2500:ms);}
+async function flush(){
+  if(flushing||!dirty||!ui.connected)return;
+  clearTimeout(timer);flushing=true;
+  while(dirty){
+    dirty=false;setSave('saving');
+    D.classes=dates();D.updated=new Date().toISOString();
+    try{await ghPut(JSON.stringify(D,null,1));setSave(dirty?'pending':'saved');}
+    catch(e){
+      dirty=true;flushing=false;setSave('error');
+      toast(e.status===409||e.status===422?'Hay cambios nuevos en GitHub. Recargá la página para verlos.':(e.status===401||e.status===403)?'El token no tiene permiso o venció.':'No se pudo guardar. Revisá la conexión y tocá “Reintentar”.','bad');
+      return;
+    }
+  }
+  flushing=false;
+}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&dirty)flush();});
+
+/* ---------- Avisos ---------- */
+let tt;
+function toast(msg,kind){const el=$('#toast');if(!el)return;el.textContent=msg;el.className='toast show '+(kind||'');clearTimeout(tt);tt=setTimeout(()=>{el.className='toast';},3600);}
+async function copyText(t){
+  try{await navigator.clipboard.writeText(t);return true;}catch(e){}
+  try{const ta=document.createElement('textarea');ta.value=t;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.select();const ok=document.execCommand('copy');ta.remove();return !!ok;}catch(e){return false;}
+}
+function feedback(kind){try{if(navigator.vibrate)navigator.vibrate(kind==='ok'?70:[50,40,50]);}catch(e){}}
+const needConn=()=>{if(ui.connected)return false;toast('Primero conectá GitHub en la pestaña Alumnos.','warn');return true;};
+
+/* ---------- Acciones del entrenador ---------- */
+function mark(s,mode,scan){
+  if(needConn())return;
+  const day=scan?today():ui.day;
+  let r;
+  if(mode==='att'){
+    const has=s.a.indexOf(day)>-1;
+    if(has&&scan){r={kind:'warn',detail:'Ya estaba presente'};}
+    else if(has){s.a=s.a.filter(d=>d!==day);ui.undo.push(()=>{s.a=s.a.concat([day]).sort();});r={kind:'warn',detail:'Asistencia quitada · '+dShort(day)};}
+    else{s.a=s.a.concat([day]).sort();ui.undo.push(()=>{s.a=s.a.filter(d=>d!==day);});r={kind:'ok',detail:'Presente · '+dShort(day)};}
+  }else{
+    const n=cfg.amount;
+    if(!n){toast('Elegí cuántos puntos sumar.','warn');return;}
+    const prevR=s.r.slice();
+    s.p+=n;s.r=[{d:today(),n:n,t:(cfg.reason||'').trim()}].concat(s.r).slice(0,6);
+    ui.undo.push(()=>{s.p-=n;s.r=prevR;});
+    r={kind:'ok',detail:sgn(n)+' puntos · total '+s.p};
+  }
+  if(ui.undo.length>30)ui.undo.shift();
+  ui.result={kind:r.kind,title:s.l,detail:r.detail,at:Date.now()};
+  feedback(r.kind);touch(scan?300:2500);render();
+}
+function processScan(code){
+  const s=stu(code);
+  if(!s){toast('Esa etiqueta no corresponde a ningún alumno.','warn');return;}
+  let last=null;try{last=JSON.parse(ls.get('club-lastscan')||'null');}catch(e){}
+  ui.tab='reg';
+  if(last&&last.code===code&&Date.now()-last.at<25000){render();return;}
+  ls.set('club-lastscan',JSON.stringify({code:code,at:Date.now()}));
+  mark(s,cfg.mode,true);
+}
+function clearHash(){try{history.replaceState(null,'',location.pathname+location.search);}catch(e){try{location.hash='';}catch(e2){}}}
+async function addStudent(full){
+  full=full.trim().replace(/\s+/g,' ');
+  if(!full)return 'empty';
+  if(!D.salt&&!D.students.length)D.salt=rnd(24);
+  if(!D.salt)D.salt=rnd(24);
+  const hs=await nameHashes(full);
+  if(D.students.some(s=>s.h[0]===hs[0]))return 'dup';
+  D.students.push({l:makeLabel(full),h:hs,c:mkCode(),a:[],p:0,r:[]});
+  return 'ok';
+}
+
+/* ---------- Vistas ---------- */
+const CREST='<svg class="crest" viewBox="0 0 60 72" aria-hidden="true"><defs><clipPath id="sh"><path d="M4 4H56V38C56 54 44 64 30 70C16 64 4 54 4 38Z"/></clipPath></defs><g clip-path="url(#sh)"><rect width="60" height="72" fill="#2f8a3e"/><rect x="21" width="18" height="72" fill="#ffffff"/><rect y="18" width="60" height="18" fill="#ffffff"/><rect x="24.5" width="11" height="72" fill="#1b4585"/><rect y="21.5" width="60" height="11" fill="#1b4585"/><circle cx="30" cy="27" r="11" fill="#ffffff"/><circle cx="30" cy="27" r="8.5" fill="none" stroke="#e1b02b" stroke-width="2"/></g><path d="M4 4H56V38C56 54 44 64 30 70C16 64 4 54 4 38Z" fill="none" stroke="#e1b02b" stroke-width="3.5" stroke-linejoin="round"/></svg>';
+function headerHtml(){
+  return '<header class="band"><div class="in">'+CREST+'<div class="ttl"><div class="club" id="clubtxt">'+esc(D?D.club:'Club')+'</div><div class="who">Entrenador</div></div>'+(ui.connected?'<button class="chip-save" id="savechip" data-act="save-now" data-st="'+ui.save+'">'+SAVE_TXT[ui.save]+'</button>':'')+'</div></header>';
+}
+function connectCard(){
+  if(ui.connected)return '<div class="card stack" style="gap:10px"><h3 style="margin:0">Conexión con GitHub</h3><div class="note ok">Conectado a <b>'+esc(REPO)+'</b>. Los cambios se publican solos para las familias.</div><div><button class="btn sm ghost" data-act="disconnect">Desconectar este teléfono</button></div></div>';
+  return '<div class="card stack" style="gap:10px"><h3 style="margin:0">Conectar con GitHub</h3>'+(ui.loadErr==='token'?'<div class="note bad" role="alert">El token no sirve o venció. Pegá uno nuevo.</div>':'<div class="muted sm">Para guardar y publicar desde esta página hace falta un token de GitHub. Queda guardado solo en este teléfono.</div>')+'<label class="field">Repositorio<input type="text" id="repo" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="usuario/repositorio" value="'+esc(REPO)+'"></label><label class="field">Token<input type="password" id="tok" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Pegá el token acá"></label><div><button class="btn primary" data-act="connect">Conectar</button></div><details class="more"><summary>Cómo crear el token</summary><ol class="how"><li>En GitHub tocá tu foto → <b>Settings</b> → <b>Developer settings</b> (al final del menú) → <b>Personal access tokens</b> → <b>Fine-grained tokens</b> → <b>Generate new token</b>.</li><li>Ponele un nombre, por ejemplo “Club”, y la expiración más larga.</li><li>En <b>Repository access</b> elegí <b>Only select repositories</b> y marcá el repositorio del sitio.</li><li>En <b>Repository permissions</b> poné <b>Contents: Read and write</b>.</li><li>Tocá <b>Generate token</b>, copialo y pegalo arriba.</li></ol></details></div>';
+}
+function resultCard(){
+  const r=ui.result;
+  if(!r||Date.now()-r.at>120000)return '<div class="card muted">Acá vas a ver el resultado de cada escaneo o marca.</div>';
+  return '<div class="card res '+r.kind+'" role="status"><div><div class="res-name">'+esc(r.title)+'</div><div class="muted sm">'+esc(r.detail)+'</div></div></div>';
+}
+function rosterRows(){
+  const q=ui.q.trim().toLowerCase(),att=cfg.mode==='att';
+  const list=byLabel().filter(s=>!q||s.l.toLowerCase().includes(q));
+  if(!list.length)return '<li class="empty">Ningún alumno coincide.</li>';
+  return list.map(s=>{
+    const p=s.a.indexOf(ui.day)>-1;
+    const btn=att?'<button class="btn '+(p?'ok':'primary')+'" data-act="mark" data-key="'+esc(s.c)+'" aria-pressed="'+p+'">'+(p?'Presente':'Marcar')+'</button>':'<button class="btn gold" data-act="mark" data-key="'+esc(s.c)+'">'+sgn(cfg.amount||0)+'</button>';
+    return '<li class="reg"><div class="rn"><b>'+esc(s.l)+'</b><div class="muted sm">'+(s.p||0)+' pts · '+s.a.length+' asistencias</div></div>'+btn+'</li>';
+  }).join('');
+}
+function emptyStu(){return '<div class="card stack"><div>Todavía no hay alumnos cargados.</div><div><button class="btn primary" data-act="go-stu">Cargar alumnos</button></div></div>';}
+function viewReg(){
+  if(!ui.connected)return '<section class="stack"><h2 class="h">Registrar</h2>'+connectCard()+'</section>';
+  if(!D.students.length)return '<section class="stack"><h2 class="h">Registrar</h2>'+emptyStu()+'</section>';
+  const att=cfg.mode==='att',here=D.students.filter(s=>s.a.indexOf(ui.day)>-1).length;
+  let h='<section class="stack"><h2 class="h">Registrar</h2>';
+  h+='<div class="seg" role="group" aria-label="Qué registra cada marca"><button data-act="mode" data-mode="att" aria-pressed="'+att+'">Asistencia</button><button data-act="mode" data-mode="pts" aria-pressed="'+!att+'">Puntos</button></div>';
+  if(att)h+='<div class="card"><label class="field">Fecha de la clase<input type="date" id="day" value="'+ui.day+'"></label></div>';
+  else h+='<div class="card stack" style="gap:12px"><div class="chips" role="group" aria-label="Puntos por marca">'+[1,2,5,10,20].map(n=>'<button class="chip" data-act="amt" data-amt="'+n+'" aria-pressed="'+(cfg.amount===n)+'">+'+n+'</button>').join('')+'</div><div class="grid2"><label class="field">Otra cantidad<input type="number" id="amt-custom" inputmode="numeric" step="1" value="'+cfg.amount+'"></label><label class="field">Motivo (se ve en el sitio de las familias)<input type="text" id="reason" maxlength="60" placeholder="Ej: ganó la ronda" value="'+esc(cfg.reason)+'"></label></div></div>';
+  h+=resultCard();
+  if(att)h+='<div class="sum"><b>'+here+'</b> de '+D.students.length+' presentes el '+esc(dShort(ui.day))+'</div>';
+  if(D.students.length>8)h+='<input type="search" id="q" placeholder="Buscar alumno" aria-label="Buscar alumno" value="'+esc(ui.q)+'">';
+  h+='<div class="card flush"><ul class="list" id="roster">'+rosterRows()+'</ul></div><div><button class="btn ghost sm" data-act="undo-last">Deshacer el último movimiento</button></div></section>';
+  return h;
+}
+function viewAtt(){
+  const ds=dates();
+  if(!D.students.length)return '<section class="stack"><h2 class="h">Asistencia</h2>'+emptyStu()+'</section>';
+  const sel=stu(ui.sel);
+  let h='<section class="stack"><h2 class="h">Asistencia</h2><label class="field">Alumno<select id="kid"><option value="">Seleccionar…</option>'+byLabel().map(s=>'<option value="'+esc(s.c)+'"'+(sel&&sel===s?' selected':'')+'>'+esc(s.l)+'</option>').join('')+'</select></label>';
+  if(sel){
+    const set=new Set(sel.a),n=ds.length,a=ds.filter(d=>set.has(d)).length,pct=n?Math.round(a/n*100):0;
+    const rk=ranking().find(r=>r.s===sel),rev=ds.slice().reverse(),shown=ui.all?rev:rev.slice(0,10);
+    h+='<div class="card stack"><div class="kn">'+esc(sel.l)+'</div><div class="stats"><div class="tile"><b>'+pct+'%</b><span>Asistencia</span></div><div class="tile"><b>'+(sel.p||0)+'</b><span>Puntos</span></div><div class="tile"><b>'+(rk?rk.pos+'º':'–')+'</b><span>Puesto</span></div></div><div class="meter" role="img" aria-label="Asistió a '+a+' de '+n+' clases"><i style="width:'+pct+'%"></i></div><div class="muted sm">'+(n?'Asistió a '+a+' de '+n+' clases.':'Todavía no se registraron clases.')+'</div></div>';
+    if(n)h+='<div class="card flush"><h3 style="margin-top:8px">Clases</h3><ul class="list">'+shown.map(d=>'<li class="cls"><span>'+esc(dShort(d))+'</span><span class="tag '+(set.has(d)?'ok':'no')+'">'+(set.has(d)?'Presente':'Ausente')+'</span></li>').join('')+'</ul>'+(rev.length>10?'<div style="padding:4px 0 8px"><button class="btn ghost sm" data-act="all">'+(ui.all?'Ver menos':'Ver las '+rev.length+' clases')+'</button></div>':'')+'</div>';
+  }else if(ds.length){
+    const last=ds[ds.length-1],c=D.students.filter(s=>s.a.indexOf(last)>-1).length;
+    h+='<div class="card"><div class="muted sm">Última clase</div><div class="kn" style="margin:2px 0 4px">'+esc(dShort(last))+'</div><div class="muted">'+c+' de '+D.students.length+' alumnos presentes.</div></div>';
+  }
+  return h+'</section>';
+}
+function viewRank(){
+  const rows=ranking(),max=Math.max(1,...rows.map(r=>r.p));
+  return '<section class="stack"><h2 class="h">Ranking</h2><div class="card flush"><ul class="list">'+(rows.length?rows.map(r=>'<li class="rk"><span class="pos'+(r.pos<=3&&r.p>0?' top':'')+'">'+r.pos+'</span><div><div class="rk-name">'+esc(r.s.l)+'</div><div class="bar"><i style="width:'+Math.round(Math.max(0,r.p)/max*100)+'%"></i></div><div class="muted sm">'+r.a+' asistencias</div></div><div class="rk-pts">'+r.p+'<small>pts</small></div></li>').join(''):'<li class="empty">Cuando se carguen alumnos y puntos, el ranking aparece acá.</li>')+'</ul></div></section>';
+}
+function studentRows(){
+  const list=byLabel();
+  if(!list.length)return '<li class="empty">Todavía no hay alumnos. Agregá el primero arriba.</li>';
+  return list.map(s=>{
+    if(ui.editing===s.c)return '<li><div class="stack" style="gap:8px"><label class="field">Etiqueta que ven las familias<input type="text" id="edit-label" value="'+esc(s.l)+'" maxlength="40"></label><label class="field">Nombre completo para el ingreso (dejalo vacío para no cambiarlo)<input type="text" id="edit-full" maxlength="60" autocomplete="off"></label><div class="acts" style="margin:0"><button class="btn primary sm" data-act="rename-save" data-key="'+esc(s.c)+'">Guardar</button><button class="btn ghost sm" data-act="rename-cancel">Cancelar</button></div></div></li>';
+    if(ui.confirm==='del:'+s.c)return '<li><div class="note bad">¿Eliminar a <b>'+esc(s.l)+'</b> con su asistencia y sus puntos?</div><div class="acts"><button class="btn danger sm" data-act="del-yes" data-key="'+esc(s.c)+'">Sí, eliminar</button><button class="btn ghost sm" data-act="confirm-no">No</button></div></li>';
+    return '<li><div class="kn" style="font-size:22px">'+esc(s.l)+'</div><div class="muted sm">'+(s.p||0)+' pts · '+s.a.length+' asistencias</div><div class="acts"><button class="btn sm primary" data-act="copy-link" data-key="'+esc(s.c)+'">Copiar link de etiqueta</button><details class="more" style="flex:1 1 100%"><summary>Más opciones</summary><div class="acts"><button class="btn sm ghost" data-act="rename" data-key="'+esc(s.c)+'">Editar</button><button class="btn sm ghost" data-act="del" data-key="'+esc(s.c)+'">Eliminar</button></div></details></div>'+(ui.showLink===s.c?'<div style="margin-top:8px"><input readonly data-select="1" value="'+esc(tagUrl(s))+'" aria-label="Link de la etiqueta"></div>':'')+'</li>';
+  }).join('');
+}
+function viewStu(){
+  let h='<section class="stack"><h2 class="h">Alumnos</h2>'+connectCard();
+  if(!ui.connected)return h+'</section>';
+  h+='<form class="card stack" id="add-form" style="gap:10px"><h3 style="margin:0">Agregar alumno</h3><div class="muted sm">Escribí el nombre completo como lo van a escribir las familias para entrar. No se guarda: solo queda la etiqueta abreviada y una huella.</div><div class="row"><input type="text" id="new-name" placeholder="Nombre y apellido" autocomplete="off" maxlength="60" value="'+esc(ui.newName)+'"><button class="btn primary" type="submit">Agregar</button></div><details class="more"><summary>Agregar varios a la vez</summary><textarea id="bulk" placeholder="Un nombre por línea"></textarea><div class="acts"><button class="btn sm" type="button" data-act="bulk-add">Agregar lista</button></div></details></form>';
+  h+='<div class="card flush"><ul class="list">'+studentRows()+'</ul></div>';
+  h+='<div class="card stack" style="gap:10px"><h3 style="margin:0">Nombre del club</h3><input type="text" id="club-name" maxlength="50" value="'+esc(D.club)+'" aria-label="Nombre del club"></div>';
+  h+='<div class="card stack" style="gap:8px"><h3 style="margin:0">Etiquetas con iPhone</h3><ol class="how"><li><b>Copiá el link</b> del alumno con el botón de arriba.</li><li>Abrí <b>NFC Tools</b> (gratis) y elegí <b>Escribir › Agregar un registro › URL</b>. Pegá el link y tocá <b>Escribir</b>.</li><li>Acercá la etiqueta a la parte de arriba del iPhone hasta que confirme.</li><li>Para registrar, acercá la etiqueta: aparece un aviso arriba, tocalo y se abre esta página con el resultado.</li></ol><div class="muted sm">Conviene agregar esta página a la pantalla de inicio: Compartir › Agregar a pantalla de inicio.</div></div>';
+  h+='<div class="card stack" style="gap:10px"><h3 style="margin:0">Datos</h3><div class="acts" style="margin:0"><button class="btn sm" data-act="show-json">'+(ui.showJson?'Ocultar datos':'Ver datos (copia)')+'</button></div>'+(ui.showJson?'<textarea readonly data-select="1" id="json-text" aria-label="Contenido de datos.json">'+esc(JSON.stringify(D,null,1))+'</textarea>':'')+'</div>';
+  h+='<div class="card stack" style="gap:10px"><h3 style="margin:0">Cuidado</h3>'+(ui.confirm==='pts'?'<div class="note bad">Esto pone en cero los puntos de todos. La asistencia no se toca.</div><div class="acts"><button class="btn danger sm" data-act="reset-yes">Sí, poner en cero</button><button class="btn ghost sm" data-act="confirm-no">No</button></div>':'<div><button class="btn sm" data-act="reset-pts">Poner los puntos en cero</button></div>')+'</div>';
+  return h+'</section>';
+}
+function errorCard(){
+  return '<section class="stack">'+(ui.loadErr==='token'?'':'<div class="card stack"><div>No pudimos cargar los datos. Revisá tu conexión.</div><div><button class="btn primary" data-act="retry">Reintentar</button></div></div>')+(TOKEN&&ui.loadErr!=='token'?'':connectCard())+'</section>';
+}
+function render(){
+  const tabs=[['reg','Registrar'],['att','Asistencia'],['rank','Ranking'],['stu','Alumnos']];
+  const views={reg:viewReg,att:viewAtt,rank:viewRank,stu:viewStu};
+  let body;
+  if(ui.loading)body='<div class="card muted">Cargando…</div>';
+  else if(!D)body=errorCard();
+  else body=views[ui.tab]();
+  $('#app').innerHTML=headerHtml()+'<main class="in main">'+body+'</main>'+(D?'<nav class="tabs" aria-label="Secciones"><div class="in">'+tabs.map(t=>'<button class="tab" data-tab="'+t[0]+'" aria-current="'+(t[0]===ui.tab?'page':'false')+'">'+t[1]+'</button>').join('')+'</div></nav>':'');
+  if(D&&D.club)document.title=D.club+' · Entrenador';
+}
+
+/* ---------- Carga ---------- */
+async function load(){
+  ui.loading=true;ui.loadErr='';render();
+  try{
+    if(TOKEN&&REPO){
+      const g=await ghGet();
+      if(g.missing){D=normalizeData(null);SHA=null;}else{D=normalizeData(g.data);SHA=g.sha;}
+      ui.connected=true;
+    }else{
+      const r=await fetch('datos.json?t='+Date.now(),{cache:'no-store'});
+      if(!r.ok)throw new Error('http');
+      D=normalizeData(await r.json());ui.connected=false;
+    }
+  }catch(e){
+    D=null;ui.connected=false;
+    ui.loadErr=(e&&(e.status===401||e.status===403))?'token':'red';
+  }
+  ui.loading=false;render();
+  const code=(location.hash||'').replace(/^#/,'');
+  if(D&&code){
+    if(ui.connected){clearHash();processScan(code);}
+    else toast('Conectá GitHub para registrar con la etiqueta.','warn');
+  }
+}
+
+/* ---------- Eventos ---------- */
+const A={
+  retry:()=>load(),
+  mode:b=>{cfg.mode=b.dataset.mode;saveCfg();render();},
+  amt:b=>{cfg.amount=+b.dataset.amt;saveCfg();render();},
+  mark:b=>{const s=stu(b.dataset.key);if(s)mark(s,cfg.mode,false);},
+  'undo-last':()=>{const f=ui.undo.pop();if(!f){toast('No hay nada para deshacer.','warn');return;}f();ui.result=null;touch();render();toast('Movimiento deshecho.','ok');},
+  'save-now':()=>{if(!dirty){toast('Todo guardado.','ok');return;}flush();},
+  'go-stu':()=>{ui.tab='stu';render();},
+  all:()=>{ui.all=!ui.all;render();},
+  connect:async()=>{
+    const repo=($('#repo').value||'').trim().replace(/^https?:\/\/github\.com\//,'').replace(/\/+$/,''),tok=($('#tok').value||'').trim();
+    if(repo.indexOf('/')<1){toast('Escribí el repositorio como usuario/nombre.','warn');return;}
+    if(!tok){toast('Pegá el token.','warn');return;}
+    REPO=repo;TOKEN=tok;ls.set('club-repo',REPO);ls.set('club-tok',TOKEN);
+    await load();
+    if(ui.connected)toast('Conectado. Ya podés cargar y publicar.','ok');
+  },
+  disconnect:()=>{TOKEN='';ls.del('club-tok');ui.connected=false;ui.loadErr='';load();},
+  'copy-link':async b=>{
+    const s=stu(b.dataset.key);if(!s)return;
+    const ok=await copyText(tagUrl(s));
+    if(ok)toast('Link de '+s.l+' copiado. Pegalo en NFC Tools.','ok');
+    else{ui.showLink=s.c;render();toast('No pude copiar solo. Copialo del cuadro.','warn');}
+  },
+  rename:b=>{ui.editing=b.dataset.key;render();},
+  'rename-save':async b=>{
+    const s=stu(b.dataset.key);if(!s)return;
+    const lab=($('#edit-label').value||'').trim(),full=($('#edit-full').value||'').trim();
+    if(full){
+      const hs=await nameHashes(full);
+      if(D.students.some(x=>x!==s&&x.h[0]===hs[0])){toast('Ya hay un alumno con ese nombre.','warn');return;}
+      s.h=hs;
+    }
+    if(lab)s.l=lab;
+    touch();ui.editing=null;render();
+  },
+  'rename-cancel':()=>{ui.editing=null;render();},
+  del:b=>{ui.confirm='del:'+b.dataset.key;render();},
+  'del-yes':b=>{const k=b.dataset.key;D.students=D.students.filter(s=>s.c!==k);if(ui.sel===k)ui.sel='';ui.confirm=null;ui.undo=[];ui.result=null;touch();render();},
+  'confirm-no':()=>{ui.confirm=null;render();},
+  'reset-pts':()=>{ui.confirm='pts';render();},
+  'reset-yes':()=>{D.students.forEach(s=>{s.p=0;s.r=[];});ui.confirm=null;ui.undo=[];ui.result=null;touch();render();toast('Puntos en cero.','ok');},
+  'show-json':()=>{ui.showJson=!ui.showJson;render();},
+  'bulk-add':async()=>{
+    const names=($('#bulk').value||'').split('\n').map(x=>x.trim()).filter(Boolean);
+    let n=0;
+    for(const x of names){if(await addStudent(x)==='ok')n++;}
+    if(n)touch();render();toast(n?n+' alumnos agregados.':'No había nombres nuevos.',n?'ok':'warn');
+  }
+};
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-tab]');
+  if(t){ui.tab=t.dataset.tab;ui.confirm=null;ui.editing=null;render();window.scrollTo(0,0);return;}
+  const b=e.target.closest('[data-act]');
+  if(b&&A[b.dataset.act])A[b.dataset.act](b);
+});
+document.addEventListener('submit',async e=>{
+  if(e.target.id!=='add-form')return;
+  e.preventDefault();
+  if(needConn())return;
+  const name=ui.newName.trim();if(!name)return;
+  const r=await addStudent(name);
+  if(r==='dup'){toast('Ya hay un alumno con ese nombre.','warn');return;}
+  ui.newName='';touch();render();toast(name.split(' ')[0]+' agregado/a.','ok');
+});
+document.addEventListener('input',e=>{
+  const t=e.target;
+  if(t.id==='new-name')ui.newName=t.value;
+  else if(t.id==='q'){ui.q=t.value;const l=$('#roster');if(l)l.innerHTML=rosterRows();}
+  else if(t.id==='amt-custom'){
+    cfg.amount=parseInt(t.value,10)||0;saveCfg();
+    document.querySelectorAll('[data-act=amt]').forEach(c=>c.setAttribute('aria-pressed',String(+c.dataset.amt===cfg.amount)));
+    document.querySelectorAll('#roster .btn.gold').forEach(c=>{c.textContent=sgn(cfg.amount);});
+  }
+  else if(t.id==='reason'){cfg.reason=t.value;saveCfg();}
+  else if(t.id==='club-name'){if(ui.connected){D.club=t.value;touch(3000);const c=$('#clubtxt');if(c)c.textContent=D.club;}}
+});
+document.addEventListener('change',e=>{
+  const t=e.target;
+  if(t.id==='kid'){ui.sel=t.value;ui.all=false;render();}
+  else if(t.id==='day'){ui.day=t.value||today();render();}
+});
+document.addEventListener('focusin',e=>{if(e.target.dataset&&e.target.dataset.select)e.target.select();});
+load();
+})();
+</script>
+</body>
+</html>
