@@ -351,7 +351,7 @@ function headerHtml(){
 }
 const errNote=()=>ui.err?'<div class="note bad" role="alert">'+esc(ui.err)+'</div>':'';
 function loginCard(){
-  return '<section class="stack"><h2 class="h">Entrenador</h2><form class="card stack" id="login" style="gap:12px"><div class="muted sm">Entrá con tu usuario y contraseña.</div><label class="field">Usuario<input type="text" id="lg-user" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false"></label><label class="field">Contraseña<input type="password" id="lg-pass" autocomplete="current-password"></label>'+errNote()+'<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" type="submit"'+(ui.busy?' disabled':'')+'>'+(ui.busy?'Entrando…':'Entrar')+'</button><a class="btn ghost" href="./">Volver al inicio</a></div><div class="muted sm">Si no tenés usuario, pedíselo a quien administra el club. Un usuario nuevo puede tardar unos minutos en funcionar.</div></form></section>';
+  return '<section class="stack"><h2 class="h">Entrenador</h2><form class="card stack" id="login" style="gap:12px">'+(ui.scanWait||(location.hash||'').length>1?'<div class="note warn">Entrá para registrar al alumno de la etiqueta.</div>':'')+'<div class="muted sm">Entrá con tu usuario y contraseña.</div><label class="field">Usuario<input type="text" id="lg-user" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false"></label><label class="field">Contraseña<input type="password" id="lg-pass" autocomplete="current-password"></label>'+errNote()+'<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" type="submit"'+(ui.busy?' disabled':'')+'>'+(ui.busy?'Entrando…':'Entrar')+'</button><a class="btn ghost" href="./">Volver al inicio</a></div><div class="muted sm">Si no tenés usuario, pedíselo a quien administra el club. Un usuario nuevo puede tardar unos minutos en funcionar.</div></form></section>';
 }
 function setupCard(){
   return '<section class="stack"><h2 class="h">Primera configuración</h2><form class="card stack" id="setup" style="gap:12px"><div class="muted sm">Todavía no hay entrenadores. Vas a ser el administrador: después vas a poder crear usuarios para los demás.</div><label class="field">Repositorio<input type="text" id="su-repo" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="usuario/repositorio" value="'+esc(REPO)+'"></label><label class="field">Token de GitHub<input type="password" id="su-tok" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Pegá el token acá"></label><details class="more"><summary>Cómo crear el token</summary><ol class="how"><li>En GitHub tocá tu foto → <b>Settings</b> → <b>Developer settings</b> → <b>Personal access tokens</b> → <b>Fine-grained tokens</b> → <b>Generate new token</b>.</li><li>Nombre “Club” y la expiración más larga.</li><li><b>Only select repositories</b>: solo el repositorio del sitio.</li><li><b>Contents: Read and write</b>. Generá y copiá el token.</li></ol></details><label class="field">Tu nombre (se ve en el panel)<input type="text" id="su-name" autocomplete="off" maxlength="30"></label><label class="field">Usuario<input type="text" id="su-user" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false"></label><label class="field">Contraseña<input type="password" id="su-pass" autocomplete="new-password"></label><div class="pw-hint">Mínimo 8 caracteres. Usá una frase larga: protege el token de GitHub.</div>'+errNote()+'<div><button class="btn primary" type="submit"'+(ui.busy?' disabled':'')+'>'+(ui.busy?'Creando…':'Crear administrador')+'</button></div></form></section>';
@@ -504,6 +504,7 @@ async function boot(){
 const norm=c=>Object.assign({},c,{g:Array.isArray(c.g)?c.g:[],adm:!!c.adm,n:c.n||'Entrenador'});
 function tryScan(){
   const code=(location.hash||'').replace(/^#/,'');
+  ui.scanWait=!!code&&!inApp();
   if(!code||!inApp())return;
   clearHash();processScan(code);
 }
@@ -679,6 +680,7 @@ document.addEventListener('change',e=>{
   if(t.id==='kid'){ui.sel=t.value;ui.all=false;render();}
   else if(t.id==='day'){ui.day=t.value||today();render();}
 });
+window.addEventListener('hashchange',()=>{ui.scanWait=!!(location.hash||'').replace(/^#/,'');if(inApp())tryScan();else render();});
 document.addEventListener('focusin',e=>{if(e.target.dataset&&e.target.dataset.select)e.target.select();});
 boot();
 })();
