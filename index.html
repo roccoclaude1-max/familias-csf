@@ -8,8 +8,8 @@
 <meta name="robots" content="noindex, nofollow">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Club">
-<title>Club · Familias</title>
+<meta name="apple-mobile-web-app-title" content="Asistencia CSF">
+<title>Asistencia CSF</title>
 <link rel="apple-touch-icon" href="icono.png">
 <link rel="icon" href="icono.png" type="image/png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -121,6 +121,7 @@ const dShort=d=>new Date(d+'T12:00:00').toLocaleDateString('es-AR',{weekday:'sho
 const sgn=n=>(n>0?'+':'')+n;
 
 let D=null,kids=[];
+const clubName=()=>(D&&D.club&&D.club!=='Mi club')?D.club:'Asistencia CSF';
 try{kids=JSON.parse(ls.get('club-hijos')||'[]');if(!Array.isArray(kids))kids=[];}catch(e){kids=[];}
 const ui={role:'',tab:'att',kid:kids[0]||'',all:false,err:'',adding:false,choose:null,loading:true,fail:false,busy:false};
 
@@ -201,7 +202,7 @@ function render(){
   else if(!logged)body=loginCard();
   else body=ui.tab==='rank'?viewRank(mine):viewAtt(mine);
   const showBar=ui.role&&logged&&!ui.loading&&!ui.fail;
-  $('#app').innerHTML='<header class="band"><div class="in">'+CREST+'<div class="ttl"><div class="club">'+esc(D&&D.club?D.club:'Club')+'</div><div class="who">Familias</div></div>'+(ui.role?'<button class="out" data-act="home">Inicio</button>':'')+(ui.role&&logged?'<button class="out" data-act="logout">Salir</button>':'')+'</div></header><main class="in main'+(showBar?'':' nobar')+'">'+body+(showBar?updated():'')+'</main>'+(showBar?'<nav class="tabs" aria-label="Secciones"><div class="in"><button class="tab" data-tab="att" aria-current="'+(ui.tab==='att'?'page':'false')+'">Asistencia</button><button class="tab" data-tab="rank" aria-current="'+(ui.tab==='rank'?'page':'false')+'">Ranking</button></div></nav>':'');
+  $('#app').innerHTML='<header class="band"><div class="in">'+CREST+'<div class="ttl"><div class="club">'+esc(clubName())+'</div></div>'+(ui.role?'<button class="out" data-act="home">Inicio</button>':'')+(ui.role&&logged?'<button class="out" data-act="logout">Salir</button>':'')+'</div></header><main class="in main'+(showBar?'':' nobar')+'">'+body+(showBar?updated():'')+'</main>'+(showBar?'<nav class="tabs" aria-label="Secciones"><div class="in"><button class="tab" data-tab="att" aria-current="'+(ui.tab==='att'?'page':'false')+'">Asistencia</button><button class="tab" data-tab="rank" aria-current="'+(ui.tab==='rank'?'page':'false')+'">Ranking</button></div></nav>':'');
 }
 async function load(){
   ui.loading=true;ui.fail=false;render();
@@ -212,7 +213,7 @@ async function load(){
     if(!D||!Array.isArray(D.students))throw new Error('formato');
   }catch(e){D=null;ui.fail=true;}
   ui.loading=false;
-  if(D&&D.club)document.title=D.club+' · Familias';
+  document.title=clubName();
   if(D&&kids.length&&!find(ui.kid))ui.kid=(myKids()[0]||{h:['']}).h[0];
   render();
 }

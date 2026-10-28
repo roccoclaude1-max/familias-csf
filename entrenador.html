@@ -8,8 +8,8 @@
 <meta name="robots" content="noindex, nofollow">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Entrenador">
-<title>Club · Entrenador</title>
+<meta name="apple-mobile-web-app-title" content="Asistencia CSF">
+<title>Asistencia CSF · Entrenador</title>
 <link rel="apple-touch-icon" href="icono.png">
 <link rel="icon" href="icono.png" type="image/png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -235,10 +235,10 @@ let cfg={mode:'att',amount:1,reason:''};
 try{cfg=Object.assign(cfg,JSON.parse(ls.get('club-cfg')||'{}'));}catch(e){}
 const saveCfg=()=>ls.set('club-cfg',JSON.stringify(cfg));
 const ui={tab:'reg',day:today(),sel:'',q:'',grp:'',confirm:null,editing:null,loading:true,bootErr:false,err:'',connected:false,save:'saved',showLink:null,newName:'',newGroup:'',result:null,all:false,showJson:false,undo:[],busy:false,notice:'',editCoach:null};
-function emptyData(){return{v:1,club:'Mi club',salt:'',updated:'',classes:[],students:[]};}
+function emptyData(){return{v:1,club:'Asistencia CSF',salt:'',updated:'',classes:[],students:[]};}
 function normalizeData(d){
   if(!d||!Array.isArray(d.students))d=emptyData();
-  d.club=d.club||'Mi club';d.salt=d.salt||'';d.classes=Array.isArray(d.classes)?d.classes:[];
+  d.club=(!d.club||d.club==='Mi club')?'Asistencia CSF':d.club;d.salt=d.salt||'';d.classes=Array.isArray(d.classes)?d.classes:[];
   d.students.forEach(s=>{s.a=Array.isArray(s.a)?s.a:[];s.p=s.p||0;s.r=Array.isArray(s.r)?s.r:[];s.h=Array.isArray(s.h)?s.h:[];s.l=s.l||'Alumno';s.g=s.g||'';});
   const seen=new Set();
   d.students.forEach(s=>{if(!s.c||seen.has(s.c))s.c='a'+rnd(7);seen.add(s.c);});
@@ -347,7 +347,7 @@ const parseGroups=t=>[...new Set(String(t||'').split(',').map(x=>x.trim()).filte
 const CREST='<svg class="crest" viewBox="0 0 60 72" aria-hidden="true"><defs><clipPath id="sh"><path d="M4 4H56V38C56 54 44 64 30 70C16 64 4 54 4 38Z"/></clipPath></defs><g clip-path="url(#sh)"><rect width="60" height="72" fill="#2f8a3e"/><rect x="21" width="18" height="72" fill="#ffffff"/><rect y="18" width="60" height="18" fill="#ffffff"/><rect x="24.5" width="11" height="72" fill="#1b4585"/><rect y="21.5" width="60" height="11" fill="#1b4585"/><circle cx="30" cy="27" r="11" fill="#ffffff"/><circle cx="30" cy="27" r="8.5" fill="none" stroke="#e1b02b" stroke-width="2"/></g><path d="M4 4H56V38C56 54 44 64 30 70C16 64 4 54 4 38Z" fill="none" stroke="#e1b02b" stroke-width="3.5" stroke-linejoin="round"/></svg>';
 const inApp=()=>!!(ME&&D&&ui.connected);
 function headerHtml(){
-  return '<header class="band"><div class="in">'+CREST+'<div class="ttl"><div class="club" id="clubtxt">'+esc(D?D.club:'Club')+'</div><div class="who">Entrenador'+(ME?' · '+esc(ME.n):'')+'</div></div>'+(inApp()?'<button class="chip-save" id="savechip" data-act="save-now" data-st="'+ui.save+'">'+SAVE_TXT[ui.save]+'</button>':'')+'</div></header>';
+  return '<header class="band"><div class="in">'+CREST+'<div class="ttl"><div class="club" id="clubtxt">'+esc(D?D.club:'Asistencia CSF')+'</div><div class="who">Entrenador'+(ME?' · '+esc(ME.n):'')+'</div></div>'+(inApp()?'<button class="chip-save" id="savechip" data-act="save-now" data-st="'+ui.save+'">'+SAVE_TXT[ui.save]+'</button>':'')+'</div></header>';
 }
 const errNote=()=>ui.err?'<div class="note bad" role="alert">'+esc(ui.err)+'</div>':'';
 function loginCard(){
